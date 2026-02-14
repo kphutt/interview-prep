@@ -1,0 +1,9 @@
+.env
+__pycache__/
+*.pyc
+.DS_Store
+*.xlsx
+*.zip
+*-backup.py
+all-content-old.md
+outputs/notebooklm/*.txt
