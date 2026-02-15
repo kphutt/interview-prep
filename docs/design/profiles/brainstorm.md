@@ -33,6 +33,7 @@ Key principle: **be cheap early, expensive late.** No API cost until the user ha
 | Target (JD / exam syllabus / topic) | What they're preparing for | `profiles/{name}/inputs/job-description.md` |
 | Notes (recruiter, personal) | Context not in the JD | `profiles/{name}/inputs/notes.md` |
 | Interview schedule + focus areas | Determines scope, depth, episode count | In `profile.md` |
+| Extra context (facts, concepts, articles) | Domain knowledge that seeds the syllabus | `profiles/{name}/inputs/context/` |
 
 Additional inputs (resume, interviewer info) are tracked in the [backlog](../backlog.md).
 

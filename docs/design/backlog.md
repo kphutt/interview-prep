@@ -2,7 +2,7 @@
 
 ## Meta-prompt workflow
 
-Every prompt in the pipeline was originally created by first writing a meta-prompt (a prompt that generates the actual prompt), then iterating on the output. This is the process that made the prompts good. For new domains/profiles, the pipeline should formalize this: meta-prompts that take profile inputs and generate domain-specific prompts (e.g., the training data section of syllabus.md, the episode content prompt calibrated to a new domain). The meta-prompts themselves are showcase artifacts.
+Every prompt in the pipeline was originally created by first writing a meta-prompt (a prompt that generates the actual prompt), then iterating on the output. This is the process that made the prompts good. For new domains/profiles, the pipeline should formalize this: every profile input (JD, notes, schedule, resume when added) gets fed through at least one meta-prompt that produces a domain-specific prompt or prompt section. The meta-prompts themselves are showcase artifacts.
 
 The most concrete need: `prompts/syllabus.md` has ~120 lines of domain-specific training data (episode seeds, mental models, protocols) that make the output consistently good. For a new profile, this entire section must be different. The intake prompt could produce episode seeds as part of its output, or a dedicated meta-prompt could generate the training data section given the profile inputs. Either way, this is the primary use case for the meta-prompt workflow.
 
