@@ -30,20 +30,20 @@ Key principle: **be cheap early, expensive late.** No API cost until the user ha
 
 | Input | Purpose | Where it lives |
 |-------|---------|---------------|
-| Resume | Baseline assessment, gap identification | `profiles/{name}/inputs/resume.pdf` |
 | Target (JD / exam syllabus / topic) | What they're preparing for | `profiles/{name}/inputs/job-description.md` |
 | Notes (recruiter, personal) | Context not in the JD | `profiles/{name}/inputs/notes.md` |
 | Interview schedule + focus areas | Determines scope, depth, episode count | In `profile.md` |
-| Interviewer info (LinkedIn, articles) | Tailor to likely questions | `profiles/{name}/inputs/interviewers/` |
 
-## Use cases (the target is broader than "job interview")
+Additional inputs (resume, interviewer info) are tracked in the [backlog](../backlog.md).
+
+## Use cases
 
 | Use case | Target | Timeline | Depth |
 |----------|--------|----------|-------|
 | Specific job | JD + company + scheduled interviews | Days to weeks | Focused on gaps, interviewer-aware |
 | General job search | Role type + company tier | Weeks to months | Broader coverage |
-| Certification | Exam syllabus (CISSP, AWS SA, etc.) | Variable | Mapped to exam domains |
-| Learning | Topic description ("distributed systems") | No deadline | Curiosity-driven |
+
+Additional use cases (certification, learning) are tracked in the [backlog](../backlog.md).
 
 ## Profile directory structure
 
@@ -74,13 +74,7 @@ Settled decisions: [decisions.md](decisions.md)
 - **All env var references** — need to read from profile config, fall back to env vars
 - **Output directory paths** — need to be profile-aware
 
-## The training data problem
-
-`prompts/syllabus.md` has a TRAINING DATA section with 12 detailed episode seeds (mental models, protocols, key details) that are entirely Security & Infrastructure. This is what makes the output consistently good — without it, the model generates more generic content.
-
-For a new domain, this training data needs to be different. The user originally crafted this manually in AI chats before the pipeline existed, using the JD + recruiter notes + personal knowledge as input.
-
-The intake prompt could generate this as part of its output — "given these inputs, here are the episode seed concepts" — but we haven't decided exactly how yet.
+Training data generation for new domains is tracked in the [backlog](../backlog.md) under Meta-prompt workflow.
 
 ## Open questions for next session
 
@@ -101,9 +95,3 @@ python prep.py all --profile {name}     # generate everything for a profile
 python prep.py render prompts/gem.md --profile {name}  # render with profile vars
 ```
 
-## What NOT to change yet
-
-- No embedded local model for intake — too complex, marginal benefit
-- No renaming `NotebookLM - Prompts/` directory (already removed; content in `prompts/`)
-- No CI/CD — not needed for a personal tool
-- Resume handling — user said "forget about it for now" but it's noted as an input
