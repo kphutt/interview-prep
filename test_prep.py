@@ -1518,5 +1518,381 @@ class TestParameterizedPrompts(unittest.TestCase):
         self.assertIn("{COMPANY}", result)
 
 
+class TestRenderTemplate(unittest.TestCase):
+    def test_substitutes_all_placeholders(self):
+        text = "Role: {PREP_ROLE}, Co: {PREP_COMPANY}, Dom: {PREP_DOMAIN}, Aud: {PREP_AUDIENCE}, Date: {AS_OF_DATE}"
+        result = prep.render_template(text)
+        self.assertNotIn("{PREP_ROLE}", result)
+        self.assertNotIn("{PREP_COMPANY}", result)
+        self.assertNotIn("{PREP_DOMAIN}", result)
+        self.assertNotIn("{PREP_AUDIENCE}", result)
+        self.assertNotIn("{AS_OF_DATE}", result)
+        self.assertIn(prep.ROLE, result)
+        self.assertIn(prep.COMPANY, result)
+        self.assertIn(prep.DOMAIN, result)
+        self.assertIn(prep.AUDIENCE, result)
+        self.assertIn(prep.AS_OF, result)
+
+    def test_leaves_unknown_placeholders(self):
+        text = "Known: {PREP_ROLE}, Unknown: {UNKNOWN_VAR}"
+        result = prep.render_template(text)
+        self.assertIn("{UNKNOWN_VAR}", result)
+        self.assertNotIn("{PREP_ROLE}", result)
+
+
+class TestGemSlotCoverage(unittest.TestCase):
+    def test_total_distinct_slots_is_8(self):
+        all_slots = {prep.gem_slot(ep) for ep in prep.ALL_EPS}
+        all_slots.add(prep.gem_slot(99))  # misc
+        self.assertEqual(len(all_slots), 8)
+
+    def test_core_maps_to_exactly_6_slots(self):
+        core_slots = {prep.gem_slot(ep) for ep in prep.CORE_EPS}
+        self.assertEqual(core_slots, {1, 2, 3, 4, 5, 6})
+
+
+class TestPackageGemScaffold(unittest.TestCase):
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self._orig = {}
+        for attr in ['IN_AGENDAS', 'IN_EPISODES', 'SYLLABUS_DIR', 'EPISODES_DIR',
+                      'RAW_DIR', 'GEM_DIR', 'NLM_DIR']:
+            self._orig[attr] = getattr(prep, attr)
+            new_dir = Path(self.tmpdir) / attr.lower()
+            new_dir.mkdir(parents=True)
+            setattr(prep, attr, new_dir)
+
+    def tearDown(self):
+        shutil.rmtree(self.tmpdir)
+        for attr, val in self._orig.items():
+            setattr(prep, attr, val)
+
+    def test_scaffold_copied_to_gem0(self):
+        (prep.SYLLABUS_DIR / "scaffold.md").write_text("scaffold content here")
+        (prep.EPISODES_DIR / "episode-01-content.md").write_text("ep1 content")
+        prep.cmd_package()
+        gem0 = prep.GEM_DIR / "gem-0-scaffold.md"
+        self.assertTrue(gem0.exists())
+        self.assertEqual(gem0.read_text(), "scaffold content here")
+
+    def test_final_merge_copied_to_gem0(self):
+        (prep.SYLLABUS_DIR / "final_merge.md").write_text("merge content here")
+        (prep.EPISODES_DIR / "episode-01-content.md").write_text("ep1 content")
+        prep.cmd_package()
+        gem0 = prep.GEM_DIR / "gem-0-final_merge.md"
+        self.assertTrue(gem0.exists())
+        self.assertEqual(gem0.read_text(), "merge content here")
+
+
+class TestScaffoldPromptListeningOrder(unittest.TestCase):
+    def test_scaffold_prompt_contains_listening_order(self):
+        run = dict(mode="SCAFFOLD", core="", frontier="")
+        result = prep.syllabus_prompt(run)
+        self.assertIn("Episodes 1-4", result)
+        self.assertIn("Episode 13", result)
+
+
+class TestBuildSyllabusRuns(unittest.TestCase):
+    def test_default_produces_8_runs(self):
+        self.assertEqual(len(prep.build_syllabus_runs(12, 3)), 8)
+
+    def test_default_matches_original(self):
+        expected = [
+            dict(mode="SCAFFOLD",        core="",     frontier=""),
+            dict(mode="CORE_BATCH",      core="1-4",  frontier=""),
+            dict(mode="FRONTIER_DIGEST", core="",     frontier="A"),
+            dict(mode="CORE_BATCH",      core="5-8",  frontier=""),
+            dict(mode="FRONTIER_DIGEST", core="",     frontier="B"),
+            dict(mode="CORE_BATCH",      core="9-12", frontier=""),
+            dict(mode="FRONTIER_DIGEST", core="",     frontier="C"),
+            dict(mode="FINAL_MERGE",     core="",     frontier=""),
+        ]
+        self.assertEqual(prep.build_syllabus_runs(12, 3), expected)
+
+    def test_8_core_2_frontier(self):
+        runs = prep.build_syllabus_runs(8, 2)
+        self.assertEqual(len(runs), 6)
+        modes = [r["mode"] for r in runs]
+        self.assertEqual(modes, [
+            "SCAFFOLD", "CORE_BATCH", "FRONTIER_DIGEST",
+            "CORE_BATCH", "FRONTIER_DIGEST", "FINAL_MERGE",
+        ])
+        cores = [r["core"] for r in runs if r["mode"] == "CORE_BATCH"]
+        self.assertEqual(cores, ["1-4", "5-8"])
+
+    def test_6_core_1_frontier(self):
+        runs = prep.build_syllabus_runs(6, 1)
+        self.assertEqual(len(runs), 5)
+        cores = [r["core"] for r in runs if r["mode"] == "CORE_BATCH"]
+        self.assertEqual(cores, ["1-4", "5-6"])
+
+    def test_4_core_0_frontier(self):
+        runs = prep.build_syllabus_runs(4, 0)
+        self.assertEqual(len(runs), 3)
+        modes = [r["mode"] for r in runs]
+        self.assertEqual(modes, ["SCAFFOLD", "CORE_BATCH", "FINAL_MERGE"])
+
+    def test_1_core(self):
+        runs = prep.build_syllabus_runs(1, 0)
+        cores = [r["core"] for r in runs if r["mode"] == "CORE_BATCH"]
+        self.assertEqual(cores, ["1"])  # not "1-1"
+
+    def test_interleaving(self):
+        runs = prep.build_syllabus_runs(12, 3)
+        for i, r in enumerate(runs):
+            if r["mode"] == "CORE_BATCH" and i + 1 < len(runs):
+                # after each core batch (except last if no remaining frontier), next should be frontier
+                next_r = runs[i + 1]
+                if next_r["mode"] != "FINAL_MERGE":
+                    self.assertEqual(next_r["mode"], "FRONTIER_DIGEST")
+
+    def test_frontier_letters_sequential(self):
+        runs = prep.build_syllabus_runs(12, 3)
+        letters = [r["frontier"] for r in runs if r["mode"] == "FRONTIER_DIGEST"]
+        self.assertEqual(letters, ["A", "B", "C"])
+
+        runs5 = prep.build_syllabus_runs(20, 5)
+        letters5 = [r["frontier"] for r in runs5 if r["mode"] == "FRONTIER_DIGEST"]
+        self.assertEqual(letters5, ["A", "B", "C", "D", "E"])
+
+    def test_more_frontiers_than_batches(self):
+        # 4 core = 1 batch, but 3 frontiers
+        runs = prep.build_syllabus_runs(4, 3)
+        letters = [r["frontier"] for r in runs if r["mode"] == "FRONTIER_DIGEST"]
+        self.assertEqual(letters, ["A", "B", "C"])
+
+    def test_batch_size_max_4(self):
+        for core in [1, 4, 5, 8, 12, 15, 20]:
+            runs = prep.build_syllabus_runs(core, 0)
+            for r in runs:
+                if r["mode"] == "CORE_BATCH":
+                    parts = r["core"].split("-")
+                    s = int(parts[0])
+                    e = int(parts[-1])
+                    self.assertLessEqual(e - s + 1, 4, f"Batch {r['core']} exceeds 4 eps")
+
+
+class TestFrontierMap(unittest.TestCase):
+    def test_default(self):
+        self.assertEqual(prep.frontier_map(), {"A": 13, "B": 14, "C": 15})
+
+    def test_8_core_2_frontier(self):
+        self.assertEqual(prep.frontier_map(8, 2), {"A": 9, "B": 10})
+
+    def test_0_frontier(self):
+        self.assertEqual(prep.frontier_map(12, 0), {})
+
+    def test_5_frontiers(self):
+        self.assertEqual(prep.frontier_map(20, 5),
+                         {"A": 21, "B": 22, "C": 23, "D": 24, "E": 25})
+
+
+class TestDynamicGemSlot(unittest.TestCase):
+    def test_default_core_unchanged(self):
+        # Same as existing TestGemSlot tests but via explicit params
+        self.assertEqual(prep.gem_slot(1, 12, [13, 14, 15]), 1)
+        self.assertEqual(prep.gem_slot(2, 12, [13, 14, 15]), 1)
+        self.assertEqual(prep.gem_slot(11, 12, [13, 14, 15]), 6)
+        self.assertEqual(prep.gem_slot(12, 12, [13, 14, 15]), 6)
+
+    def test_default_frontier_unchanged(self):
+        self.assertEqual(prep.gem_slot(13, 12, [13, 14, 15]), 7)
+        self.assertEqual(prep.gem_slot(15, 12, [13, 14, 15]), 7)
+
+    def test_default_misc_unchanged(self):
+        self.assertEqual(prep.gem_slot(16, 12, [13, 14, 15]), 8)
+        self.assertEqual(prep.gem_slot(99, 12, [13, 14, 15]), 8)
+
+    def test_8_core_2_frontier(self):
+        self.assertEqual(prep.gem_slot(1, 8, [9, 10]), 1)
+        self.assertEqual(prep.gem_slot(8, 8, [9, 10]), 4)
+        self.assertEqual(prep.gem_slot(9, 8, [9, 10]), 5)   # frontier slot
+        self.assertEqual(prep.gem_slot(99, 8, [9, 10]), 6)   # misc slot
+
+    def test_7_core_odd(self):
+        # ep 7 is solo in last core slot
+        self.assertEqual(prep.gem_slot(7, 7, [8]), 4)
+
+    def test_0_frontier(self):
+        self.assertEqual(prep.gem_slot(1, 6, []), 1)
+        self.assertEqual(prep.gem_slot(99, 6, []), 4)  # no frontier slot, misc = ceil(6/2)+1
+
+
+class TestDynamicManifest(unittest.TestCase):
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self._orig = {}
+        for attr in ['IN_AGENDAS', 'IN_EPISODES', 'SYLLABUS_DIR', 'EPISODES_DIR',
+                      'GEM_DIR', 'NLM_DIR', 'OUTPUTS']:
+            self._orig[attr] = getattr(prep, attr)
+            new_dir = Path(self.tmpdir) / attr.lower()
+            new_dir.mkdir(parents=True)
+            setattr(prep, attr, new_dir)
+
+    def tearDown(self):
+        prep._reconfigure()
+        shutil.rmtree(self.tmpdir)
+        for attr, val in self._orig.items():
+            setattr(prep, attr, val)
+
+    def test_uses_dynamic_total(self):
+        prep._reconfigure(8, 2)
+        prep.write_manifest()
+        text = (prep.OUTPUTS / "manifest.txt").read_text()
+        self.assertIn("0/10", text)
+        self.assertNotIn("/15", text)
+
+    def test_all_present_dynamic(self):
+        prep._reconfigure(4, 1)
+        for ep in prep.ALL_EPS:
+            (prep.SYLLABUS_DIR / prep.ep_file(ep, "agenda")).write_text("agenda " * 100)
+            (prep.EPISODES_DIR / prep.ep_file(ep, "content")).write_text("content " * 500)
+        prep.write_manifest()
+        text = (prep.OUTPUTS / "manifest.txt").read_text()
+        self.assertIn("all 5 episodes", text)
+        self.assertNotIn("15", text)
+
+    def test_header_shows_dynamic_run_count(self):
+        prep._reconfigure(8, 2)
+        # Also set up RAW_DIR for cmd_syllabus
+        raw_dir = Path(self.tmpdir) / "raw_dir"
+        raw_dir.mkdir(parents=True)
+        orig_raw = prep.RAW_DIR
+        prep.RAW_DIR = raw_dir
+        try:
+            import io
+            from contextlib import redirect_stdout
+            # Create all needed files so all runs are skipped
+            (prep.SYLLABUS_DIR / "scaffold.md").write_text("scaffold")
+            (prep.SYLLABUS_DIR / "final_merge.md").write_text("merge")
+            for ep in prep.ALL_EPS:
+                (prep.SYLLABUS_DIR / prep.ep_file(ep, "agenda")).write_text("agenda")
+            client = MagicMock()
+            with redirect_stdout(io.StringIO()) as f:
+                prep.cmd_syllabus(client, force=False)
+            output = f.getvalue()
+            self.assertIn("6 runs", output)
+            self.assertNotIn("8 runs", output)
+        finally:
+            prep.RAW_DIR = orig_raw
+
+
+class TestDynamicPackaging(unittest.TestCase):
+    def test_total_slots_default(self):
+        self.assertEqual(prep._total_gem_slots(), 8)
+
+    def test_total_slots_8_core(self):
+        self.assertEqual(prep._total_gem_slots(8, 2), 6)
+
+    def test_total_slots_0_frontier(self):
+        self.assertEqual(prep._total_gem_slots(6, 0), 4)
+
+    def test_8_core_creates_correct_gem_files(self):
+        tmpdir = tempfile.mkdtemp()
+        orig = {}
+        for attr in ['IN_AGENDAS', 'IN_EPISODES', 'SYLLABUS_DIR', 'EPISODES_DIR',
+                      'RAW_DIR', 'GEM_DIR', 'NLM_DIR']:
+            orig[attr] = getattr(prep, attr)
+            new_dir = Path(tmpdir) / attr.lower()
+            new_dir.mkdir(parents=True)
+            setattr(prep, attr, new_dir)
+        prep._reconfigure(8, 2)
+        try:
+            # Create content for all 10 episodes
+            for ep in prep.ALL_EPS:
+                (prep.EPISODES_DIR / prep.ep_file(ep, "content")).write_text(f"Content for ep {ep}")
+            prep.cmd_package()
+            # Core slots 1-4, frontier slot 5
+            for slot in range(1, 5):
+                self.assertTrue((prep.GEM_DIR / f"gem-{slot}.md").exists(), f"gem-{slot}.md missing")
+            self.assertTrue((prep.GEM_DIR / "gem-5.md").exists(), "gem-5.md (frontier) missing")
+        finally:
+            prep._reconfigure()
+            shutil.rmtree(tmpdir)
+            for attr, val in orig.items():
+                setattr(prep, attr, val)
+
+    def test_misc_goes_to_dynamic_slot(self):
+        tmpdir = tempfile.mkdtemp()
+        orig = {}
+        for attr in ['IN_AGENDAS', 'IN_EPISODES', 'SYLLABUS_DIR', 'EPISODES_DIR',
+                      'RAW_DIR', 'GEM_DIR', 'NLM_DIR']:
+            orig[attr] = getattr(prep, attr)
+            new_dir = Path(tmpdir) / attr.lower()
+            new_dir.mkdir(parents=True)
+            setattr(prep, attr, new_dir)
+        prep._reconfigure(8, 2)
+        try:
+            (prep.EPISODES_DIR / "misc-paper-content.md").write_text("Misc content")
+            prep.cmd_package()
+            # With 8 core + 2 frontier: misc goes to slot 6
+            self.assertTrue((prep.GEM_DIR / "gem-6.md").exists(), "gem-6.md (misc) missing")
+            self.assertIn("Misc content", (prep.GEM_DIR / "gem-6.md").read_text())
+        finally:
+            prep._reconfigure()
+            shutil.rmtree(tmpdir)
+            for attr, val in orig.items():
+                setattr(prep, attr, val)
+
+
+class TestModelCapabilities(unittest.TestCase):
+    """Test _model_capabilities() returns correct kwargs per model."""
+
+    def setUp(self):
+        self._orig_effort = prep.EFFORT
+        self._orig_verbosity = prep.VERBOSITY
+        prep.EFFORT = "high"
+        prep.VERBOSITY = ""
+
+    def tearDown(self):
+        prep.EFFORT = self._orig_effort
+        prep.VERBOSITY = self._orig_verbosity
+
+    def test_gpt52pro_includes_reasoning_and_text(self):
+        result = prep._model_capabilities("gpt-5.2-pro")
+        self.assertIn("reasoning", result)
+        self.assertEqual(result["reasoning"]["effort"], "high")
+        self.assertEqual(result["text"]["verbosity"], "high")
+
+    def test_gpt41_excludes_reasoning_and_text(self):
+        result = prep._model_capabilities("gpt-4.1-mini")
+        self.assertNotIn("reasoning", result)
+        self.assertNotIn("text", result)
+
+
+class TestDynamicConfig(unittest.TestCase):
+    def tearDown(self):
+        prep._reconfigure()
+
+    def test_core_count_var_exists(self):
+        self.assertEqual(prep._CORE_COUNT, 12)
+
+    def test_frontier_count_var_exists(self):
+        self.assertEqual(prep._FRONTIER_COUNT, 3)
+
+    def test_eps_derived_from_counts(self):
+        self.assertEqual(prep.CORE_EPS, list(range(1, prep._CORE_COUNT + 1)))
+        self.assertEqual(prep.FRONTIER_EPS, list(range(prep._CORE_COUNT + 1, prep._CORE_COUNT + prep._FRONTIER_COUNT + 1)))
+
+    def test_reconfigure_changes_all_derived_state(self):
+        prep._reconfigure(8, 2)
+        self.assertEqual(prep._CORE_COUNT, 8)
+        self.assertEqual(prep._FRONTIER_COUNT, 2)
+        self.assertEqual(prep.CORE_EPS, list(range(1, 9)))
+        self.assertEqual(prep.FRONTIER_EPS, [9, 10])
+        self.assertEqual(prep.ALL_EPS, list(range(1, 11)))
+        self.assertEqual(len(prep.SYLLABUS_RUNS), 6)
+
+    def test_reconfigure_defaults_restore(self):
+        prep._reconfigure(8, 2)
+        prep._reconfigure()
+        self.assertEqual(prep._CORE_COUNT, 12)
+        self.assertEqual(prep._FRONTIER_COUNT, 3)
+        self.assertEqual(prep.CORE_EPS, list(range(1, 13)))
+        self.assertEqual(prep.FRONTIER_EPS, [13, 14, 15])
+        self.assertEqual(prep.ALL_EPS, list(range(1, 16)))
+        self.assertEqual(len(prep.SYLLABUS_RUNS), 8)
+
+
 if __name__ == "__main__":
     unittest.main()

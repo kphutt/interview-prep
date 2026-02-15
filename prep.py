@@ -20,8 +20,10 @@ Setup:
 """
 
 import argparse
+import math
 import os
 import re
+import string
 import sys
 import time
 from pathlib import Path
@@ -54,31 +56,101 @@ COMPANY  = os.environ.get("PREP_COMPANY", "a top tech company")
 DOMAIN   = os.environ.get("PREP_DOMAIN", "Security & Infrastructure")
 AUDIENCE = os.environ.get("PREP_AUDIENCE", "Senior Software Engineers")
 
-CORE_EPS     = list(range(1, 13))
-FRONTIER_EPS = [13, 14, 15]
+_CORE_COUNT     = int(os.environ.get("PREP_CORE_EPISODES", "12"))
+_FRONTIER_COUNT = int(os.environ.get("PREP_FRONTIER_EPISODES", "3"))
+
+CORE_EPS     = list(range(1, _CORE_COUNT + 1))
+FRONTIER_EPS = list(range(_CORE_COUNT + 1, _CORE_COUNT + _FRONTIER_COUNT + 1))
 ALL_EPS      = CORE_EPS + FRONTIER_EPS
 
-def gem_slot(ep):
-    if 1 <= ep <= 12:  return (ep - 1) // 2 + 1
-    if 13 <= ep <= 15: return 7
-    return 8
+def frontier_map(core_count=None, frontier_count=None):
+    """Map frontier letters to episode numbers. e.g. {"A": 13, "B": 14, "C": 15}."""
+    if core_count is None: core_count = _CORE_COUNT
+    if frontier_count is None: frontier_count = _FRONTIER_COUNT
+    return {chr(65 + i): core_count + i + 1 for i in range(frontier_count)}
 
-SYLLABUS_RUNS = [
-    dict(mode="SCAFFOLD",        core="",     frontier=""),
-    dict(mode="CORE_BATCH",      core="1-4",  frontier=""),
-    dict(mode="FRONTIER_DIGEST", core="",     frontier="A"),
-    dict(mode="CORE_BATCH",      core="5-8",  frontier=""),
-    dict(mode="FRONTIER_DIGEST", core="",     frontier="B"),
-    dict(mode="CORE_BATCH",      core="9-12", frontier=""),
-    dict(mode="FRONTIER_DIGEST", core="",     frontier="C"),
-    dict(mode="FINAL_MERGE",     core="",     frontier=""),
-]
+def gem_slot(ep, core_count=None, frontier_eps=None):
+    """Return the gem file slot number for an episode."""
+    if core_count is None: core_count = _CORE_COUNT
+    if frontier_eps is None: frontier_eps = FRONTIER_EPS
+    core_slots = math.ceil(core_count / 2)
+    if 1 <= ep <= core_count:
+        return (ep - 1) // 2 + 1
+    if ep in frontier_eps:
+        return core_slots + 1
+    return core_slots + (2 if frontier_eps else 1)
+
+def _total_gem_slots(core_count=None, frontier_count=None):
+    """Total number of gem slots: ceil(core/2) + (1 if frontiers) + 1 misc."""
+    if core_count is None: core_count = _CORE_COUNT
+    if frontier_count is None: frontier_count = _FRONTIER_COUNT
+    return math.ceil(core_count / 2) + (1 if frontier_count > 0 else 0) + 1
+
+def build_syllabus_runs(core_count, frontier_count, batch_size=4):
+    """Build the SYLLABUS_RUNS list dynamically from episode counts."""
+    runs = [dict(mode="SCAFFOLD", core="", frontier="")]
+    num_batches = math.ceil(core_count / batch_size) if core_count > 0 else 0
+    letters = list(string.ascii_uppercase[:frontier_count])
+    for b in range(num_batches):
+        s = b * batch_size + 1
+        e = min((b + 1) * batch_size, core_count)
+        core_str = str(s) if s == e else f"{s}-{e}"
+        runs.append(dict(mode="CORE_BATCH", core=core_str, frontier=""))
+        if b < len(letters):
+            runs.append(dict(mode="FRONTIER_DIGEST", core="", frontier=letters[b]))
+    for extra in letters[num_batches:]:
+        runs.append(dict(mode="FRONTIER_DIGEST", core="", frontier=extra))
+    runs.append(dict(mode="FINAL_MERGE", core="", frontier=""))
+    return runs
+
+SYLLABUS_RUNS = build_syllabus_runs(_CORE_COUNT, _FRONTIER_COUNT)
+
+def _reconfigure(core_count=12, frontier_count=3):
+    """Regenerate all derived state from counts. Used by tests and profile loading."""
+    global _CORE_COUNT, _FRONTIER_COUNT, CORE_EPS, FRONTIER_EPS, ALL_EPS, SYLLABUS_RUNS
+    _CORE_COUNT = core_count
+    _FRONTIER_COUNT = frontier_count
+    CORE_EPS = list(range(1, core_count + 1))
+    FRONTIER_EPS = list(range(core_count + 1, core_count + frontier_count + 1))
+    ALL_EPS = CORE_EPS + FRONTIER_EPS
+    SYLLABUS_RUNS = build_syllabus_runs(core_count, frontier_count)
 
 # ---------------------------------------------------------------------------
 # OPENAI CLIENT
 # ---------------------------------------------------------------------------
 EFFORT = os.environ.get("OPENAI_EFFORT", "xhigh")  # xhigh | high | medium | low
+VERBOSITY = os.environ.get("OPENAI_VERBOSITY", "")   # "" = auto-detect from model
 MAX_OUTPUT = int(os.environ.get("OPENAI_MAX_TOKENS", "16000"))
+
+# Model family capabilities: (supports_reasoning, default_verbosity)
+_MODEL_CAPS = {
+    "gpt-5.2":   (True,  "high"),
+    "o3":        (True,  "medium"),
+    "o4-mini":   (True,  "medium"),
+    "o4":        (True,  "medium"),
+    "gpt-4.1":   (False, None),
+    "gpt-4o":    (False, None),
+}
+
+def _model_capabilities(model):
+    """Build optional kwargs for responses.create() based on model name."""
+    # Match longest prefix
+    supports_reasoning, default_verbosity = True, None  # safe fallback
+    best_len = 0
+    for prefix, caps in _MODEL_CAPS.items():
+        if model.startswith(prefix) and len(prefix) > best_len:
+            supports_reasoning, default_verbosity = caps
+            best_len = len(prefix)
+
+    kwargs = {}
+    if supports_reasoning:
+        kwargs["reasoning"] = {"effort": EFFORT}
+
+    verbosity = VERBOSITY or default_verbosity
+    if verbosity and verbosity != "none":
+        kwargs["text"] = {"verbosity": verbosity}
+
+    return kwargs
 POLL_TIMEOUT = int(os.environ.get("POLL_TIMEOUT", "1800"))  # 30 min default
 
 def get_client():
@@ -96,6 +168,7 @@ def get_client():
 
 def call_llm(client, instructions, user_input, label="", retries=3):
     """Call OpenAI Responses API with background mode + polling."""
+    model_kwargs = _model_capabilities(MODEL)
     for attempt in range(retries):
         try:
             if label: print(f"  -> {MODEL} (effort={EFFORT}): {label}...")
@@ -105,8 +178,7 @@ def call_llm(client, instructions, user_input, label="", retries=3):
                 model=MODEL,
                 background=True,
                 store=True,
-                reasoning={"effort": EFFORT},
-                text={"verbosity": "high"},
+                **model_kwargs,
                 max_output_tokens=MAX_OUTPUT,
                 instructions=instructions,
                 input=user_input,
@@ -218,13 +290,17 @@ def parse_agendas(text):
     # with optional prefixes: ##, **, numbering like "1) ", combinations thereof
     pat = re.compile(
         r'^[\s*#\d\)\.]*(?:Episode\s+(\d+))|'
-        r'^[\s*#\d\)\.]*(?:Frontier\s+Digest\s+([ABC]))',
+        r'^[\s*#\d\)\.]*(?:Frontier\s+Digest\s+([A-Z]))',
         re.MULTILINE | re.IGNORECASE
     )
     matches = list(pat.finditer(text))
     for i, m in enumerate(matches):
         if m.group(1):   ep = int(m.group(1))
-        elif m.group(2): ep = {"A":13,"B":14,"C":15}[m.group(2).upper()]
+        elif m.group(2):
+            fmap = frontier_map()
+            letter = m.group(2).upper()
+            if letter not in fmap: continue
+            ep = fmap[letter]
         else: continue
         start = m.start()
         end = matches[i+1].start() if i+1 < len(matches) else len(text)
@@ -290,7 +366,7 @@ def recover_agendas_from_raw():
 # COMMANDS
 # ---------------------------------------------------------------------------
 def cmd_syllabus(client, force=False):
-    print("\n=== SYLLABUS (8 runs) ===\n")
+    print(f"\n=== SYLLABUS ({len(SYLLABUS_RUNS)} runs) ===\n")
     if force: print("  (--force: regenerating all)\n")
     recover_agendas_from_raw()
     prior_outputs = []  # accumulate prior run outputs as context
@@ -298,7 +374,7 @@ def cmd_syllabus(client, force=False):
     for i, run in enumerate(SYLLABUS_RUNS):
         num = i + 1
         mode = run["mode"]
-        tag = f"Run {num}/8: {mode}"
+        tag = f"Run {num}/{len(SYLLABUS_RUNS)}: {mode}"
         if run["core"]:    tag += f" ({run['core']})"
         if run["frontier"]: tag += f" (Digest {run['frontier']})"
 
@@ -318,7 +394,8 @@ def cmd_syllabus(client, force=False):
                 continue
 
         if not force and mode == "CORE_BATCH":
-            s, e = map(int, run["core"].split("-"))
+            parts = run["core"].split("-")
+            s, e = int(parts[0]), int(parts[-1])
             if all(find_agenda(n) for n in range(s, e+1)):
                 print(f"  skip {tag} - agendas exist")
                 for n in range(s, e+1):
@@ -326,7 +403,7 @@ def cmd_syllabus(client, force=False):
                 continue
 
         if not force and mode == "FRONTIER_DIGEST":
-            ep = {"A":13,"B":14,"C":15}[run["frontier"]]
+            ep = frontier_map()[run["frontier"]]
             if find_agenda(ep):
                 print(f"  skip {tag} - agenda exists")
                 prior_outputs.append(find_agenda(ep).read_text())
@@ -410,7 +487,10 @@ def cmd_package():
     print("\n=== PACKAGING ===\n")
 
     content = {}
-    for ep in ALL_EPS + list(range(16, 30)):
+    total = _total_gem_slots()
+    # Search ALL_EPS plus a buffer for extra episodes beyond the configured range
+    search_range = ALL_EPS + list(range(len(ALL_EPS) + 1, len(ALL_EPS) + 15))
+    for ep in search_range:
         c = find_content(ep)
         if c: content[ep] = c.read_text()
 
@@ -427,12 +507,12 @@ def cmd_package():
         (NLM_DIR / f.name).write_text(f.read_text())
     print(f"  NotebookLM: {len(content) + len(misc_files)} files")
 
-    # Gem: 8 merged files
-    buckets = {i: [] for i in range(1, 9)}
+    # Gem: dynamic merged files
+    buckets = {i: [] for i in range(1, total + 1)}
     for ep, txt in sorted(content.items()):
         buckets[gem_slot(ep)].append((f"EPISODE {ep}", txt))
     for f in misc_files:
-        buckets[8].append((f"MISC: {f.stem}", f.read_text()))
+        buckets[total].append((f"MISC: {f.stem}", f.read_text()))
 
     for slot, items in buckets.items():
         if not items: continue
@@ -453,7 +533,8 @@ def cmd_package():
     print(f"  Gem        -> {GEM_DIR}/\n")
     return True
 
-def cmd_add(client, filepath, slot=8):
+def cmd_add(client, filepath, slot=None):
+    slot = slot or _total_gem_slots()
     print(f"\n=== ADD: {filepath} -> gem-{slot} ===\n")
     src = Path(filepath)
     if not src.exists():
@@ -499,7 +580,7 @@ def cmd_status():
         print(f"  ep {ep:02d}: {'Y ' + c.parent.name + '/' + c.name if c else 'X missing'}")
 
     print("\nGem files:")
-    for i in range(1, 9):
+    for i in range(1, _total_gem_slots() + 1):
         g = GEM_DIR / f"gem-{i}.md"
         print(f"  gem-{i}.md: {'Y ' + f'{len(g.read_text()):,} chars' if g.exists() else 'X'}")
 
@@ -529,7 +610,8 @@ def write_manifest():
             agenda_count += 1
         else:
             lines.append(f"  ep {ep:02d}: MISSING")
-    lines.append(f"  Total: {agenda_count}/15\n")
+    total = len(ALL_EPS)
+    lines.append(f"  Total: {agenda_count}/{total}\n")
 
     # Content
     lines.append("CONTENT:")
@@ -544,11 +626,11 @@ def write_manifest():
             total_bytes += sz
         else:
             lines.append(f"  ep {ep:02d}: MISSING")
-    lines.append(f"  Total: {content_count}/15 ({total_bytes:,} bytes)\n")
+    lines.append(f"  Total: {content_count}/{total} ({total_bytes:,} bytes)\n")
 
     # Gem files
     lines.append("GEM FILES:")
-    for slot in range(0, 9):
+    for slot in range(0, _total_gem_slots() + 1):
         for g in sorted(GEM_DIR.glob(f"gem-{slot}*.md")):
             lines.append(f"  {g.name} ({g.stat().st_size:,} bytes)")
     lines.append("")
@@ -563,11 +645,11 @@ def write_manifest():
     # Gaps / warnings
     lines.append("WARNINGS:")
     warnings = 0
-    if agenda_count < 15:
-        lines.append(f"  MISSING {15 - agenda_count} agenda(s)")
+    if agenda_count < total:
+        lines.append(f"  MISSING {total - agenda_count} agenda(s)")
         warnings += 1
-    if content_count < 15:
-        lines.append(f"  MISSING {15 - content_count} content file(s)")
+    if content_count < total:
+        lines.append(f"  MISSING {total - content_count} content file(s)")
         warnings += 1
     for ep in ALL_EPS:
         c = find_content(ep)
@@ -575,7 +657,7 @@ def write_manifest():
             lines.append(f"  ep {ep:02d} content suspiciously small ({c.stat().st_size} bytes)")
             warnings += 1
     if warnings == 0:
-        lines.append("  None — all 15 episodes present and reasonable size")
+        lines.append(f"  None — all {total} episodes present and reasonable size")
 
     manifest = "\n".join(lines)
     p = OUTPUTS / "manifest.txt"
@@ -609,8 +691,9 @@ def main():
     p = argparse.ArgumentParser(description="Interview Prep Pipeline")
     p.add_argument("command", choices=["all","syllabus","content","add","package","status","render"])
     p.add_argument("file", nargs="?", help="File path for 'add' or 'render'")
-    p.add_argument("--gem-slot", type=int, default=8, choices=range(1,9),
-                   help="Gem slot for misc content (default: 8)")
+    total = _total_gem_slots()
+    p.add_argument("--gem-slot", type=int, default=total, choices=range(1, total + 1),
+                   help=f"Gem slot for misc content (default: {total})")
     p.add_argument("--force", action="store_true",
                    help="Regenerate everything, even if files exist")
     args = p.parse_args()
