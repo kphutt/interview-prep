@@ -193,6 +193,16 @@ def distill_prompt(raw):
     t = t.replace("{RAW_DOCUMENT}", raw)
     return t
 
+def render_template(text):
+    """Replace all {PREP_*} and {AS_OF_DATE} placeholders with env var values."""
+    t = text
+    t = t.replace("{PREP_ROLE}", ROLE)
+    t = t.replace("{PREP_COMPANY}", COMPANY)
+    t = t.replace("{PREP_DOMAIN}", DOMAIN)
+    t = t.replace("{PREP_AUDIENCE}", AUDIENCE)
+    t = t.replace("{AS_OF_DATE}", AS_OF)
+    return t
+
 # System instructions for each prompt type
 SYLLABUS_INSTRUCTIONS = f"You are a {ROLE} at {COMPANY} acting as an expert interview coach. Follow the prompt instructions exactly. Output ONLY what the MODE asks for."
 CONTENT_INSTRUCTIONS = f"You are a {ROLE} at {COMPANY} acting as an expert interview coach. Generate a dense, Staff-level technical content document. Output ONLY the content document."
@@ -597,8 +607,8 @@ def cmd_all(client, force=False):
 # ---------------------------------------------------------------------------
 def main():
     p = argparse.ArgumentParser(description="Interview Prep Pipeline")
-    p.add_argument("command", choices=["all","syllabus","content","add","package","status"])
-    p.add_argument("file", nargs="?", help="File path for 'add'")
+    p.add_argument("command", choices=["all","syllabus","content","add","package","status","render"])
+    p.add_argument("file", nargs="?", help="File path for 'add' or 'render'")
     p.add_argument("--gem-slot", type=int, default=8, choices=range(1,9),
                    help="Gem slot for misc content (default: 8)")
     p.add_argument("--force", action="store_true",
@@ -609,6 +619,16 @@ def main():
 
     if args.command == "status":  cmd_status(); return
     if args.command == "package": cmd_package(); return
+    if args.command == "render":
+        if not args.file:
+            print("Usage: python prep.py render <prompt-file>")
+            sys.exit(1)
+        p = Path(args.file)
+        if not p.exists():
+            print(f"ERROR: {p} not found")
+            sys.exit(1)
+        print(render_template(p.read_text()), end="")
+        return
 
     client = get_client()
     force = args.force

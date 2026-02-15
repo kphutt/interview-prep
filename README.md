@@ -44,6 +44,7 @@ These flow into the system instructions and prompt templates. The pipeline gener
 | `prep.py content` | Generate content for existing agendas |
 | `prep.py add paper.pdf --gem-slot 3` | Distill doc -> content -> package |
 | `prep.py package` | Repackage into Gem + NotebookLM |
+| `prep.py render prompts/gem.md` | Substitute env vars and print to stdout |
 | `prep.py status` | Show what exists |
 
 ## Output
@@ -104,7 +105,13 @@ The `prompts/` directory includes system prompts for the study tools that consum
 - **`prompts/notebooklm.md`** — NotebookLM: podcast generation prompt that turns episode content into two-host technical deep-dives
 - **`prompts/notebooklm-frames.md`** — Per-episode frames (format, central argument, stakes) pasted above the prompt for each podcast run
 
-Both use `{PREP_ROLE}`, `{PREP_DOMAIN}`, etc. placeholders — replace before pasting into the platform. The Gem's Bookshelf and example questions are written for Security & Infrastructure; adapt to your domain.
+Both use `{PREP_ROLE}`, `{PREP_DOMAIN}`, etc. placeholders. Use `render` to substitute your env vars and copy to clipboard:
+
+```bash
+python prep.py render prompts/gem.md | pbcopy
+```
+
+The Gem's Bookshelf and example questions are written for Security & Infrastructure; adapt to your domain.
 
 ## API Details
 

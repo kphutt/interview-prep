@@ -36,6 +36,7 @@ python prep.py syllabus                   # Generate agendas only
 python prep.py content                    # Generate content for existing agendas
 python prep.py add <file> --gem-slot N    # Distill doc -> content -> package
 python prep.py package                    # Repackage outputs
+python prep.py render <file>               # Substitute env vars, print to stdout
 python prep.py status                     # Show what exists
 ```
 
