@@ -4,9 +4,9 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-yellow.svg)](LICENSE)
 [![Tests: 128 passed](https://img.shields.io/badge/tests-128_passed-brightgreen)]()
 
-One command generates a 15-episode technical deep-dive syllabus with content, packaged for NotebookLM and Gemini.
+A prompt-engineering pipeline that generates technical deep-dive content using OpenAI's Responses API, packaged for NotebookLM podcasts and a Gemini coaching bot.
 
-Built with prompt engineering + OpenAI's Responses API. The prompts are the crown jewels — they define episode structure, depth targets, and quality self-checks that consistently produce Staff-level technical content.
+The prompts are the crown jewels — they define episode structure, depth targets, and quality self-checks that consistently produce Staff-level technical content. The repo ships with 15 episodes of Security & Infrastructure content (already generated). The pipeline is being generalized to support any domain via [profiles](docs/design/profiles/).
 
 ## Quick Start
 
@@ -30,10 +30,9 @@ Edit `.env` to set your interview target:
 PREP_ROLE="Principal SRE"
 PREP_COMPANY="Meta"
 PREP_DOMAIN="Reliability & Infrastructure"
-PREP_AUDIENCE="Senior Software Engineers"
 ```
 
-These flow into the system instructions and prompt templates. The pipeline generates content tailored to your role, company, and domain.
+These variables flow into system instructions and prompt templates — they control the tone and framing of generated content (e.g., "You are preparing for a Principal SRE interview at Meta"). They don't change the domain-specific training data in the prompts; see [Adapting to a New Domain](#adapting-to-a-new-domain) for that.
 
 ## Commands
 
@@ -82,16 +81,23 @@ Drop into `inputs/` with these names — pipeline skips what exists:
 | OPENAI_EFFORT | xhigh | Reasoning effort: xhigh, high, medium, low |
 | OPENAI_MAX_TOKENS | 16000 | Max output tokens |
 | AS_OF_DATE | Feb 2026 | For frontier digests |
-| PREP_ROLE | Staff Engineer | Your target role |
-| PREP_COMPANY | a top tech company | Target company |
-| PREP_DOMAIN | Security & Infrastructure | Interview domain |
-| PREP_AUDIENCE | Senior Software Engineers | Content audience |
+| PREP_ROLE | Staff Engineer | Target role — used in system instructions |
+| PREP_COMPANY | a top tech company | Target company — used in system instructions |
+| PREP_DOMAIN | Security & Infrastructure | Interview domain — used in system instructions |
+
+## Adapting to a New Domain
+
+Changing the `PREP_` env vars adjusts system instruction framing but doesn't change the underlying domain content. A full domain switch also requires:
+
+- **Training data in `prompts/syllabus.md`** — ~120 lines of episode seeds calibrated to Security & Infrastructure
+- **Episode count** — hardcoded to 15 (12 core + 3 frontier) in `prep.py` and `syllabus.md`
+- **Platform prompts** — the Gem Bookshelf (`prompts/gem.md`) and NotebookLM frames (`prompts/notebooklm-frames.md`) are written for Security & Infrastructure
+
+The [profiles](docs/design/profiles/) initiative is designed to make this end-to-end: a single profile config that drives domain content, episode count, and platform prompts.
 
 ## Tests
 
 ```bash
-python -m pytest test_prep.py
-# or
 python -m unittest test_prep -v
 ```
 
