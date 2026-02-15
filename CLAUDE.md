@@ -12,6 +12,8 @@ Interview prep content pipeline. Generates a 15-episode technical deep-dive syll
 - `prompts/syllabus.md` — Syllabus generation prompt (uses `.format()`)
 - `prompts/content.md` — Content generation prompt (uses `.replace()`)
 - `prompts/distill.md` — Document distillation prompt (uses `.replace()`)
+- `prompts/gem.md` — Gemini Gem system prompt (manual use, not processed by pipeline)
+- `prompts/notebooklm.md` — NotebookLM podcast prompt (manual use, not processed by pipeline)
 - `.env.example` — Config template matching actual env var names (values quoted for shell sourcing)
 
 ## Architecture

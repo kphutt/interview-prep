@@ -96,6 +96,15 @@ python -m unittest test_prep -v
 
 128 tests covering prompt assembly, template structure, file helpers, skip/resume logic, packaging, manifest generation, and edge cases.
 
+## Platform Prompts
+
+The `prompts/` directory includes system prompts for the study tools that consume the generated content:
+
+- **`prompts/gem.md`** — Gemini Gem: an interview coach with two personas (Domain Expert + RRK), three modes (Interview, Rapid Fire, Explore), and a concept tracking system with Status Reports
+- **`prompts/notebooklm.md`** — NotebookLM: podcast generation prompt that turns episode content into two-host technical deep-dives
+
+Both use `{PREP_ROLE}`, `{PREP_DOMAIN}`, etc. placeholders — replace before pasting into the platform. The Gem's Bookshelf and example questions are written for Security & Infrastructure; adapt to your domain.
+
 ## API Details
 
 Uses the OpenAI **Responses API** (not Chat Completions) with:
