@@ -5,6 +5,10 @@
 
   The host descriptions below are written for Security & Infrastructure.
   Adapt Host 2's translation lens to your domain.
+
+  Workflow: for each episode, paste the matching frame from
+  notebooklm-frames.md into the EPISODE FRAME section below,
+  then use as the notebook instructions.
 -->
 
 # NotebookLM Podcast Prompt

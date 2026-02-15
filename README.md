@@ -102,6 +102,7 @@ The `prompts/` directory includes system prompts for the study tools that consum
 
 - **`prompts/gem.md`** — Gemini Gem: an interview coach with two personas (Domain Expert + RRK), three modes (Interview, Rapid Fire, Explore), and a concept tracking system with Status Reports
 - **`prompts/notebooklm.md`** — NotebookLM: podcast generation prompt that turns episode content into two-host technical deep-dives
+- **`prompts/notebooklm-frames.md`** — Per-episode frames (format, central argument, stakes) pasted above the prompt for each podcast run
 
 Both use `{PREP_ROLE}`, `{PREP_DOMAIN}`, etc. placeholders — replace before pasting into the platform. The Gem's Bookshelf and example questions are written for Security & Infrastructure; adapt to your domain.
 

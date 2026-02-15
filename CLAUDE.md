@@ -14,6 +14,7 @@ Interview prep content pipeline. Generates a 15-episode technical deep-dive syll
 - `prompts/distill.md` — Document distillation prompt (uses `.replace()`)
 - `prompts/gem.md` — Gemini Gem system prompt (manual use, not processed by pipeline)
 - `prompts/notebooklm.md` — NotebookLM podcast prompt (manual use, not processed by pipeline)
+- `prompts/notebooklm-frames.md` — Per-episode frames that seed each NotebookLM podcast run
 - `.env.example` — Config template matching actual env var names (values quoted for shell sourcing)
 
 ## Architecture
