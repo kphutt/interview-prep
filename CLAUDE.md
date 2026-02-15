@@ -55,3 +55,13 @@ Tests use `unittest` with `MagicMock` for the OpenAI client. Many tests redirect
 - `os.environ.get()` for all config, no python-dotenv dependency
 - Generated content in `outputs/` is committed (it cost ~$50 to generate)
 - `.env` is gitignored; `.env.example` is committed
+
+## Design docs
+
+Design documents live in `docs/design/`. Convention:
+
+- `backlog.md` — Ideas not yet tied to an initiative (short paragraphs)
+- `{initiative}/brainstorm.md` — Exploration, specs, open questions, code impact
+- `{initiative}/decisions.md` — Settled choices (extracted from brainstorm, append-only)
+
+Lifecycle: backlog item → initiative folder with brainstorm → decisions extracted as they're made.
