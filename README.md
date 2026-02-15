@@ -1,5 +1,9 @@
 # Interview Prep Pipeline
 
+[![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue?logo=python&logoColor=white)](https://www.python.org)
+[![License: MIT](https://img.shields.io/badge/license-MIT-yellow.svg)](LICENSE)
+[![Tests: 128 passed](https://img.shields.io/badge/tests-128_passed-brightgreen)]()
+
 One command generates a 15-episode technical deep-dive syllabus with content, packaged for NotebookLM and Gemini.
 
 Built with prompt engineering + OpenAI's Responses API. The prompts are the crown jewels — they define episode structure, depth targets, and quality self-checks that consistently produce Staff-level technical content.
@@ -7,16 +11,14 @@ Built with prompt engineering + OpenAI's Responses API. The prompts are the crow
 ## Quick Start
 
 ```bash
-pip install openai
+pip install -r requirements.txt
 
-# Copy and edit your config
 cp .env.example .env
-# Edit .env: set OPENAI_API_KEY and your target role
+# Edit .env: add your OPENAI_API_KEY
 
-# Source your config
-source .env && export $(grep -v '^#' .env | xargs)
+# Load config
+set -a && source .env && set +a
 
-# Run everything
 python prep.py all
 ```
 
@@ -48,8 +50,11 @@ These flow into the system instructions and prompt templates. The pipeline gener
 
 ```
 outputs/
-  notebooklm/   <- Upload to NotebookLM (individual episode files)
-  gem/           <- Upload to Gemini (8 merged files)
+  syllabus/      <- Episode agendas (source of truth for content gen)
+  episodes/      <- Full content documents (canonical)
+  raw/           <- Raw API responses (backup)
+  notebooklm/    <- Individual episode files (copied from episodes/ by `package`)
+  gem/           <- Merged episode pairs (derived from episodes/ by `package`)
     gem-1.md       episodes 1-2
     gem-2.md       episodes 3-4
     gem-3.md       episodes 5-6
@@ -70,6 +75,7 @@ Drop into `inputs/` with these names — pipeline skips what exists:
 
 | Variable | Default | Notes |
 |----------|---------|-------|
+| Python | 3.9+ | Required |
 | OPENAI_API_KEY | (required) | Get from platform.openai.com |
 | OPENAI_MODEL | gpt-5.2-pro | Uses Responses API |
 | OPENAI_EFFORT | xhigh | Reasoning effort: xhigh, high, medium, low |

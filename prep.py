@@ -13,12 +13,17 @@ Usage:
     python prep.py status                       # Show what exists
 
 Setup:
-    pip install openai
-    export OPENAI_API_KEY='sk-...'
+    pip install -r requirements.txt
+    cp .env.example .env   # edit .env with your API key
+    set -a && source .env && set +a
     python prep.py all
 """
 
-import os, re, sys, time, argparse
+import argparse
+import os
+import re
+import sys
+import time
 from pathlib import Path
 
 # ---------------------------------------------------------------------------
@@ -85,7 +90,7 @@ def get_client():
     key = os.environ.get("OPENAI_API_KEY")
     if not key:
         print("ERROR: OPENAI_API_KEY not set.")
-        print("  export OPENAI_API_KEY='sk-...'")
+        print("  Set in .env or: export OPENAI_API_KEY='sk-...'")
         sys.exit(1)
     return OpenAI(api_key=key)
 
@@ -154,7 +159,8 @@ def call_llm(client, instructions, user_input, label="", retries=3):
 def load_prompt(name):
     p = PROMPTS / f"{name}.md"
     if not p.exists():
-        print(f"ERROR: {p} not found"); sys.exit(1)
+        print(f"ERROR: {p} not found")
+        sys.exit(1)
     return p.read_text()
 
 def syllabus_prompt(run):
@@ -611,7 +617,8 @@ def main():
     elif args.command == "content":  cmd_content(client, force)
     elif args.command == "add":
         if not args.file:
-            print("Usage: python prep.py add <file> [--gem-slot N]"); sys.exit(1)
+            print("Usage: python prep.py add <file> [--gem-slot N]")
+            sys.exit(1)
         cmd_add(client, args.file, args.gem_slot)
 
 if __name__ == "__main__":

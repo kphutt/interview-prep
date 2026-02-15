@@ -8,10 +8,11 @@ Interview prep content pipeline. Generates a 15-episode technical deep-dive syll
 
 - `prep.py` — Main pipeline script (single file, ~600 lines)
 - `test_prep.py` — 128 unit tests
+- `requirements.txt` — Python dependencies (openai>=2.0.0)
 - `prompts/syllabus.md` — Syllabus generation prompt (uses `.format()`)
 - `prompts/content.md` — Content generation prompt (uses `.replace()`)
 - `prompts/distill.md` — Document distillation prompt (uses `.replace()`)
-- `.env.example` — Config template matching actual env var names
+- `.env.example` — Config template matching actual env var names (values quoted for shell sourcing)
 
 ## Architecture
 
@@ -46,6 +47,7 @@ Tests use `unittest` with `MagicMock` for the OpenAI client. Many tests redirect
 ## Style
 
 - Single-file script, no classes (functions + module-level config)
+- Python 3.9+ required
 - `os.environ.get()` for all config, no python-dotenv dependency
 - Generated content in `outputs/` is committed (it cost ~$50 to generate)
 - `.env` is gitignored; `.env.example` is committed

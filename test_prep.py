@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
 """Unit tests for prep.py"""
 
-import os, sys, tempfile, shutil, unittest
+import os
+import shutil
+import sys
+import tempfile
+import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, patch, PropertyMock
 

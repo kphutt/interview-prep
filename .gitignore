@@ -1,5 +1,8 @@
 .env
+.env.local
 __pycache__/
+.pytest_cache/
+venv/
 *.pyc
 .DS_Store
 *.xlsx
@@ -7,3 +10,4 @@ __pycache__/
 *-backup.py
 all-content-old.md
 outputs/notebooklm/*.txt
+outputs/manifest.txt
