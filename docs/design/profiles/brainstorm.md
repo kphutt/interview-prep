@@ -69,12 +69,12 @@ Settled decisions: [decisions.md](decisions.md)
 
 ### `prep.py`
 
-- **`prep.py:57-58`** — `CORE_EPS`, `FRONTIER_EPS` hardcoded to 12+3
-- **`prep.py:66-75`** — `SYLLABUS_RUNS` hardcodes 8-call sequence
-- **`prep.py:61-64`** — `gem_slot()` assumes 12+3 structure
-- **`prep.py:227, 329`** — Frontier digest mapping `{"A":13,"B":14,"C":15}` hardcoded twice
-- **`prep.py:430-444`** — Gem packaging iterates `range(1, 9)` — always 8 slots
-- **`prep.py:516-583`** — `write_manifest()` hardcodes "X/15" and "all 15 episodes present"
+- **`prep.py:57-58`** — `CORE_EPS`, `FRONTIER_EPS` hardcoded to 12+3 — **[DONE — Phase 1]**
+- **`prep.py:66-75`** — `SYLLABUS_RUNS` hardcodes 8-call sequence — **[DONE — Phase 1]**
+- **`prep.py:61-64`** — `gem_slot()` assumes 12+3 structure — **[DONE — Phase 1]**
+- **`prep.py:227, 329`** — Frontier digest mapping `{"A":13,"B":14,"C":15}` hardcoded twice — **[DONE — Phase 1]**
+- **`prep.py:430-444`** — Gem packaging iterates `range(1, 9)` — always 8 slots — **[DONE — Phase 1]**
+- **`prep.py:516-583`** — `write_manifest()` hardcodes "X/15" and "all 15 episodes present" — **[DONE — Phase 1]**
 - **All env var references** — need to read from profile config, fall back to env vars
 - **Output directory paths** — need to be profile-aware
 
