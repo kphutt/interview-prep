@@ -1174,11 +1174,10 @@ class TestPromptTemplateStructure(unittest.TestCase):
                         "Nitty Gritty", "Staff Pivot", "Scenario Challenge"]:
             self.assertIn(section, t)
 
-    def test_syllabus_has_training_data(self):
+    def test_syllabus_has_domain_seeds_marker(self):
         t = prep.load_prompt("syllabus")
         self.assertIn("TRAINING DATA", t)
-        self.assertIn("Episode 1:", t)
-        self.assertIn("Episode 12:", t)
+        self.assertIn("{DOMAIN_SEEDS}", t)
 
     def test_content_has_section_headings(self):
         t = prep.load_prompt("content")
@@ -1470,12 +1469,18 @@ class TestParameterizedPrompts(unittest.TestCase):
         result = prep.syllabus_prompt(run)
         self.assertNotIn("Staff Security Engineer (L6) at Google", result)
 
-    def test_syllabus_prompt_still_has_training_data(self):
-        """Training data should be preserved (has Google internals as examples)."""
-        run = dict(mode="SCAFFOLD", core="", frontier="")
-        result = prep.syllabus_prompt(run)
-        self.assertIn("mTLS", result)
-        self.assertIn("DPoP", result)
+    def test_syllabus_prompt_injects_adapted_seeds(self):
+        """When adapted content is loaded, seeds should appear in prompt."""
+        orig_adapted = prep._ADAPTED.copy()
+        try:
+            prep._ADAPTED = {"DOMAIN_SEEDS": "Episode 1: mTLS handshake\nEpisode 2: DPoP proofs"}
+            run = dict(mode="SCAFFOLD", core="", frontier="")
+            result = prep.syllabus_prompt(run)
+            self.assertIn("mTLS", result)
+            self.assertIn("DPoP", result)
+            self.assertNotIn("{DOMAIN_SEEDS}", result)
+        finally:
+            prep._ADAPTED = orig_adapted
 
     def test_syllabus_prompt_still_has_mode(self):
         """Existing format vars should still work."""
@@ -1857,6 +1862,30 @@ class TestDynamicPackaging(unittest.TestCase):
                 setattr(prep, attr, val)
 
 
+class TestClampEffort(unittest.TestCase):
+    """Test _clamp_effort() returns correct clamped values."""
+
+    def test_valid_effort_unchanged(self):
+        val, clamped = prep._clamp_effort("high", {"low", "medium", "high"})
+        self.assertEqual(val, "high")
+        self.assertFalse(clamped)
+
+    def test_low_clamped_up(self):
+        val, clamped = prep._clamp_effort("low", {"medium", "high", "xhigh"})
+        self.assertEqual(val, "medium")
+        self.assertTrue(clamped)
+
+    def test_xhigh_clamped_down(self):
+        val, clamped = prep._clamp_effort("xhigh", {"low", "medium", "high"})
+        self.assertEqual(val, "high")
+        self.assertTrue(clamped)
+
+    def test_none_allowed_passes_through(self):
+        val, clamped = prep._clamp_effort("low", None)
+        self.assertEqual(val, "low")
+        self.assertFalse(clamped)
+
+
 class TestModelCapabilities(unittest.TestCase):
     """Test _model_capabilities() returns correct kwargs per model."""
 
@@ -1880,6 +1909,80 @@ class TestModelCapabilities(unittest.TestCase):
         result = prep._model_capabilities("gpt-4.1-mini")
         self.assertNotIn("reasoning", result)
         self.assertNotIn("text", result)
+
+    def test_gpt52pro_clamps_low_to_medium(self):
+        prep.EFFORT = "low"
+        result = prep._model_capabilities("gpt-5.2-pro")
+        self.assertEqual(result["reasoning"]["effort"], "medium")
+
+    def test_o3_clamps_xhigh_to_high(self):
+        prep.EFFORT = "xhigh"
+        result = prep._model_capabilities("o3")
+        self.assertEqual(result["reasoning"]["effort"], "high")
+
+    def test_gpt4o_mini_excludes_reasoning(self):
+        result = prep._model_capabilities("gpt-4o-mini")
+        self.assertNotIn("reasoning", result)
+        self.assertNotIn("text", result)
+
+    def test_unknown_model_gets_safe_defaults(self):
+        result = prep._model_capabilities("some-future-model")
+        self.assertIn("reasoning", result)
+
+
+class TestBadRequestRetry(unittest.TestCase):
+    """Test call_llm() strips params on BadRequestError without consuming an attempt."""
+
+    def setUp(self):
+        self._orig_model = prep.MODEL
+        self._orig_effort = prep.EFFORT
+        prep.MODEL = "gpt-5.2-pro"
+        prep.EFFORT = "high"
+
+    def tearDown(self):
+        prep.MODEL = self._orig_model
+        prep.EFFORT = self._orig_effort
+
+    def test_bad_request_strips_params_and_succeeds(self):
+        from openai import BadRequestError
+        mock_client = MagicMock()
+        # First call raises BadRequestError, second succeeds
+        good_resp = MagicMock()
+        good_resp.status = "completed"
+        good_resp.output_text = "result"
+        good_resp.usage = None
+        mock_client.responses.create.side_effect = [
+            BadRequestError(
+                message="Unsupported parameter",
+                response=MagicMock(status_code=400, headers={}),
+                body=None,
+            ),
+            good_resp,
+        ]
+        result = prep.call_llm(mock_client, "instr", "input", retries=3)
+        self.assertEqual(result, "result")
+        self.assertEqual(mock_client.responses.create.call_count, 2)
+
+    def test_bad_request_strip_does_not_consume_attempt(self):
+        from openai import BadRequestError
+        mock_client = MagicMock()
+        good_resp = MagicMock()
+        good_resp.status = "completed"
+        good_resp.output_text = "result"
+        good_resp.usage = None
+        # BadRequest then a normal error then success — should still work with retries=2
+        mock_client.responses.create.side_effect = [
+            BadRequestError(
+                message="Unsupported parameter",
+                response=MagicMock(status_code=400, headers={}),
+                body=None,
+            ),
+            Exception("transient"),
+            good_resp,
+        ]
+        result = prep.call_llm(mock_client, "instr", "input", retries=2)
+        self.assertEqual(result, "result")
+        self.assertEqual(mock_client.responses.create.call_count, 3)
 
 
 class TestDynamicConfig(unittest.TestCase):
@@ -2037,16 +2140,26 @@ class _ProfileTestMixin:
         self._profile_saved = {}
         for attr in self._PROFILE_DIR_ATTRS + self._PROFILE_CFG_ATTRS + self._PROFILE_COUNT_ATTRS:
             self._profile_saved[attr] = getattr(prep, attr)
+        self._saved_adapted = prep._ADAPTED.copy()
 
     def _restore_profile_state(self):
         for attr, val in self._profile_saved.items():
             setattr(prep, attr, val)
+        prep._ADAPTED = self._saved_adapted
 
     def _write_profile(self, name, content, base=None):
         base = base or self.tmpdir
         d = Path(base) / "profiles" / name
         d.mkdir(parents=True, exist_ok=True)
         (d / "profile.md").write_text(content, encoding="utf-8")
+
+    def _write_adapted(self, name, adapted_files, base=None):
+        """Write adapted/ files for a profile. adapted_files: dict of fname->content."""
+        base = base or self.tmpdir
+        d = Path(base) / "profiles" / name / "adapted"
+        d.mkdir(parents=True, exist_ok=True)
+        for fname, content in adapted_files.items():
+            (d / fname).write_text(content, encoding="utf-8")
 
 
 class TestLoadProfile(unittest.TestCase):
@@ -2185,7 +2298,25 @@ class TestCostEstimates(unittest.TestCase):
         prep.MODEL = "gpt-5.2-pro"
         try:
             _, cost = prep._estimate_cost(1)
-            self.assertEqual(cost, 1.50)
+            self.assertEqual(cost, 2.00)
+        finally:
+            prep.MODEL = orig
+
+    def test_gpt4o_mini_cost(self):
+        orig = prep.MODEL
+        prep.MODEL = "gpt-4o-mini"
+        try:
+            _, cost = prep._estimate_cost(1)
+            self.assertEqual(cost, 0.02)
+        finally:
+            prep.MODEL = orig
+
+    def test_gpt52pro_cost(self):
+        orig = prep.MODEL
+        prep.MODEL = "gpt-5.2-pro"
+        try:
+            _, cost = prep._estimate_cost(1)
+            self.assertEqual(cost, 2.00)
         finally:
             prep.MODEL = orig
 
@@ -2208,10 +2339,42 @@ class TestCostEstimates(unittest.TestCase):
     def test_main_calls_confirm_before_api(self, mock_confirm, mock_client):
         """Cost confirmation declining should prevent any API command from running."""
         mock_client.return_value = MagicMock()
-        with patch('sys.argv', ['prep.py', 'syllabus']):
-            prep.main()
-        mock_confirm.assert_called_once()
-        mock_client.return_value.responses.create.assert_not_called()
+        tmpdir = tempfile.mkdtemp()
+        # Save ALL profile state (set_profile changes dirs, config, adapted, counts)
+        saved = {}
+        _all_attrs = (
+            _ProfileTestMixin._PROFILE_DIR_ATTRS
+            + _ProfileTestMixin._PROFILE_CFG_ATTRS
+            + _ProfileTestMixin._PROFILE_COUNT_ATTRS
+        )
+        for attr in _all_attrs:
+            saved[attr] = getattr(prep, attr)
+        orig_base = prep.BASE_DIR
+        orig_adapted = prep._ADAPTED.copy()
+        try:
+            prep.BASE_DIR = Path(tmpdir)
+            # Create a valid profile with non-stub adapted files
+            profile_dir = Path(tmpdir) / "profiles" / "testcost"
+            for sub in ["inputs/agendas", "inputs/episodes", "inputs/misc",
+                        "outputs/syllabus", "outputs/episodes", "outputs/gem",
+                        "outputs/notebooklm", "outputs/raw", "adapted"]:
+                (profile_dir / sub).mkdir(parents=True, exist_ok=True)
+            (profile_dir / "profile.md").write_text(
+                "---\nrole: Tester\ncompany: TestCo\ndomain: Testing\n---\n",
+                encoding="utf-8")
+            for fname in ["seeds.md", "coverage.md", "lenses.md", "gem-sections.md"]:
+                (profile_dir / "adapted" / fname).write_text(
+                    f"<!-- PLACEHOLDER -->\nreal content\n", encoding="utf-8")
+            with patch('sys.argv', ['prep.py', 'syllabus', '--profile', 'testcost']):
+                prep.main()
+            mock_confirm.assert_called_once()
+            mock_client.return_value.responses.create.assert_not_called()
+        finally:
+            prep.BASE_DIR = orig_base
+            prep._ADAPTED = orig_adapted
+            for attr, val in saved.items():
+                setattr(prep, attr, val)
+            shutil.rmtree(tmpdir)
 
 
 class TestEnhancedStatus(_ProfileTestMixin, unittest.TestCase):
@@ -2689,6 +2852,411 @@ class TestMigration(unittest.TestCase):
             return  # dir doesn't exist yet
         episodes = list((top_outputs / "episodes").glob("episode-*.md")) if (top_outputs / "episodes").exists() else []
         self.assertEqual(len(episodes), 0, "Top-level outputs/ should not contain episode content")
+
+
+class TestParseAdaptedSections(unittest.TestCase):
+    """Test _parse_adapted_sections parser."""
+
+    def test_single_section(self):
+        text = "<!-- FOO -->\nsome content\nmore content"
+        result = prep._parse_adapted_sections(text)
+        self.assertEqual(result, {"FOO": "some content\nmore content"})
+
+    def test_multiple_sections(self):
+        text = "<!-- A -->\nalpha\n<!-- B -->\nbeta\nbeta2"
+        result = prep._parse_adapted_sections(text)
+        self.assertEqual(result["A"], "alpha")
+        self.assertEqual(result["B"], "beta\nbeta2")
+
+    def test_empty_section(self):
+        text = "<!-- A -->\n<!-- B -->\ncontent"
+        result = prep._parse_adapted_sections(text)
+        self.assertEqual(result["A"], "")
+        self.assertEqual(result["B"], "content")
+
+    def test_no_markers(self):
+        text = "just plain text\nno markers here"
+        result = prep._parse_adapted_sections(text)
+        self.assertEqual(result, {})
+
+    def test_content_with_braces(self):
+        """Adapted content may contain {json} that shouldn't break anything."""
+        text = '<!-- X -->\n{"key": "value"}\nmore {stuff}'
+        result = prep._parse_adapted_sections(text)
+        self.assertIn('{"key": "value"}', result["X"])
+
+
+class TestInjectAdapted(_ProfileTestMixin, unittest.TestCase):
+    """Test adapted file loading and injection into prompts."""
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self._save_profile_state()
+        self._orig_base = prep.BASE_DIR
+        prep.BASE_DIR = Path(self.tmpdir)
+
+    def tearDown(self):
+        prep.BASE_DIR = self._orig_base
+        self._restore_profile_state()
+        shutil.rmtree(self.tmpdir)
+
+    def test_load_adapted_reads_sections(self):
+        """_load_adapted should parse all adapted files and merge markers."""
+        self._write_profile("test", "---\nrole: R\ncompany: C\ndomain: D\n---\n")
+        self._write_adapted("test", {
+            "seeds.md": "<!-- DOMAIN_SEEDS -->\nEpisode 1: Widgets",
+            "coverage.md": "<!-- COVERAGE_FRAMEWORK -->\nWidget Coverage Map",
+        })
+        result = prep._load_adapted("test")
+        self.assertEqual(result["DOMAIN_SEEDS"], "Episode 1: Widgets")
+        self.assertEqual(result["COVERAGE_FRAMEWORK"], "Widget Coverage Map")
+
+    def test_inject_adapted_replaces_markers(self):
+        """_inject_adapted should replace {MARKER} placeholders."""
+        adapted = {"FOO": "replaced-foo", "BAR": "replaced-bar"}
+        text = "prefix {FOO} middle {BAR} suffix"
+        result = prep._inject_adapted(text, adapted)
+        self.assertEqual(result, "prefix replaced-foo middle replaced-bar suffix")
+
+    def test_inject_adapted_uses_global(self):
+        """Without explicit dict, _inject_adapted uses _ADAPTED global."""
+        orig = prep._ADAPTED.copy()
+        try:
+            prep._ADAPTED = {"MARKER": "global-val"}
+            result = prep._inject_adapted("test {MARKER} end")
+            self.assertEqual(result, "test global-val end")
+        finally:
+            prep._ADAPTED = orig
+
+    def test_inject_missing_marker_leaves_placeholder(self):
+        """If adapted doesn't have a marker, placeholder stays in text."""
+        result = prep._inject_adapted("test {UNKNOWN_MARKER} end", {})
+        self.assertEqual(result, "test {UNKNOWN_MARKER} end")
+
+    def test_load_adapted_warns_on_no_sections(self):
+        """Files without markers should trigger a warning."""
+        self._write_profile("test", "---\nrole: R\ncompany: C\ndomain: D\n---\n")
+        self._write_adapted("test", {"bad.md": "no markers here"})
+        import io
+        captured = io.StringIO()
+        import contextlib
+        with contextlib.redirect_stdout(captured):
+            prep._load_adapted("test")
+        self.assertIn("WARNING", captured.getvalue())
+
+    def test_load_adapted_empty_dir(self):
+        """Empty adapted dir returns empty dict."""
+        self._write_profile("test", "---\nrole: R\ncompany: C\ndomain: D\n---\n")
+        (Path(self.tmpdir) / "profiles" / "test" / "adapted").mkdir(parents=True, exist_ok=True)
+        result = prep._load_adapted("test")
+        self.assertEqual(result, {})
+
+    def test_load_adapted_no_dir(self):
+        """Missing adapted dir returns empty dict."""
+        self._write_profile("test", "---\nrole: R\ncompany: C\ndomain: D\n---\n")
+        result = prep._load_adapted("test")
+        self.assertEqual(result, {})
+
+    def test_brace_content_not_double_replaced(self):
+        """Adapted content with {braces} shouldn't be treated as markers."""
+        adapted = {"FOO": 'config: {"nested": true}'}
+        text = "pre {FOO} post"
+        result = prep._inject_adapted(text, adapted)
+        self.assertIn('{"nested": true}', result)
+
+    def test_syllabus_prompt_with_adapted(self):
+        """syllabus_prompt should inject adapted seeds into output."""
+        orig = prep._ADAPTED.copy()
+        try:
+            prep._ADAPTED = {
+                "DOMAIN_SEEDS": "Episode 1: Test Topic Seeds",
+                "COVERAGE_FRAMEWORK": "Test Coverage Framework",
+                "DOMAIN_LENS": "test domain lens",
+            }
+            run = dict(mode="SCAFFOLD", core="", frontier="")
+            result = prep.syllabus_prompt(run)
+            self.assertIn("Test Topic Seeds", result)
+            self.assertIn("Test Coverage Framework", result)
+            self.assertNotIn("{DOMAIN_SEEDS}", result)
+            self.assertNotIn("{COVERAGE_FRAMEWORK}", result)
+        finally:
+            prep._ADAPTED = orig
+
+    def test_content_prompt_with_adapted(self):
+        """content_prompt should inject adapted lenses into output."""
+        orig = prep._ADAPTED.copy()
+        try:
+            prep._ADAPTED = {
+                "DOMAIN_LENS": "data engineering lens",
+                "NITTY_GRITTY_LAYOUT": "DE layout here",
+                "DOMAIN_REQUIREMENTS": "DE requirements here",
+                "STAKEHOLDERS": "Data, Product, Platform",
+            }
+            result = prep.content_prompt("test agenda")
+            self.assertIn("data engineering lens", result)
+            self.assertIn("DE layout here", result)
+            self.assertIn("DE requirements here", result)
+            self.assertIn("Data, Product, Platform", result)
+            self.assertNotIn("{DOMAIN_LENS}", result)
+        finally:
+            prep._ADAPTED = orig
+
+
+class TestIsStub(unittest.TestCase):
+    """Test _is_stub detection."""
+
+    def test_stub_file(self):
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.md', delete=False, encoding='utf-8') as f:
+            f.write("<!-- STUB: This is a stub -->\n<!-- More comments -->")
+            f.flush()
+            self.assertTrue(prep._is_stub(Path(f.name)))
+        os.unlink(f.name)
+
+    def test_real_file(self):
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.md', delete=False, encoding='utf-8') as f:
+            f.write("<!-- DOMAIN_SEEDS -->\nEpisode 1: Real Content")
+            f.flush()
+            self.assertFalse(prep._is_stub(Path(f.name)))
+        os.unlink(f.name)
+
+    def test_missing_file(self):
+        self.assertTrue(prep._is_stub(Path("/nonexistent/file.md")))
+
+    def test_empty_file(self):
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.md', delete=False, encoding='utf-8') as f:
+            f.write("")
+            f.flush()
+            self.assertTrue(prep._is_stub(Path(f.name)))
+        os.unlink(f.name)
+
+
+class TestPreflightCheck(_ProfileTestMixin, unittest.TestCase):
+    """Test _preflight_check validation before API calls."""
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self._save_profile_state()
+        self._orig_base = prep.BASE_DIR
+        prep.BASE_DIR = Path(self.tmpdir)
+
+    def tearDown(self):
+        prep.BASE_DIR = self._orig_base
+        self._restore_profile_state()
+        shutil.rmtree(self.tmpdir)
+
+    def _setup_profile_with_adapted(self, name, stub=False):
+        """Helper: create profile with adapted files (real or stub)."""
+        self._write_profile(name, "---\nrole: R\ncompany: C\ndomain: D\n---\n")
+        if stub:
+            self._write_adapted(name, {
+                "seeds.md": "<!-- STUB: placeholder -->\n",
+                "coverage.md": "<!-- STUB: placeholder -->\n",
+                "lenses.md": "<!-- STUB: placeholder -->\n",
+                "gem-sections.md": "<!-- STUB: placeholder -->\n",
+            })
+        else:
+            self._write_adapted(name, {
+                "seeds.md": "<!-- DOMAIN_SEEDS -->\nEpisode 1: Real",
+                "coverage.md": "<!-- COVERAGE_FRAMEWORK -->\nReal",
+                "lenses.md": "<!-- DOMAIN_LENS -->\nReal",
+                "gem-sections.md": "<!-- GEM_BOOKSHELF -->\nReal",
+            })
+
+    def test_preflight_passes_with_real_adapted(self):
+        """Preflight should succeed with non-stub adapted files."""
+        self._setup_profile_with_adapted("good", stub=False)
+        # Should not raise
+        prep._preflight_check("good", "syllabus")
+
+    def test_preflight_catches_stub_adapted(self):
+        """Preflight should error on stub adapted files."""
+        self._setup_profile_with_adapted("bad", stub=True)
+        with self.assertRaises(SystemExit) as cm:
+            prep._preflight_check("bad", "syllabus")
+        self.assertEqual(cm.exception.code, 1)
+
+    def test_preflight_catches_missing_adapted(self):
+        """Preflight should error when adapted files are missing entirely."""
+        self._write_profile("noadapt", "---\nrole: R\ncompany: C\ndomain: D\n---\n")
+        (Path(self.tmpdir) / "profiles" / "noadapt" / "adapted").mkdir(parents=True, exist_ok=True)
+        with self.assertRaises(SystemExit):
+            prep._preflight_check("noadapt", "syllabus")
+
+    @patch('prep.get_client')
+    def test_preflight_runs_before_client(self, mock_get_client):
+        """When adapted files are stubs, get_client should never be called."""
+        self._setup_profile_with_adapted("stubbed", stub=True)
+        with self.assertRaises(SystemExit):
+            with patch('sys.argv', ['prep.py', 'syllabus', '--profile', 'stubbed']):
+                prep.main()
+        mock_get_client.assert_not_called()
+
+
+class TestApiCommandsRequireProfile(unittest.TestCase):
+    """API commands should require --profile."""
+
+    def test_syllabus_without_profile_errors(self):
+        with self.assertRaises(SystemExit) as cm:
+            with patch('sys.argv', ['prep.py', 'syllabus']):
+                prep.main()
+        self.assertEqual(cm.exception.code, 1)
+
+    def test_content_without_profile_errors(self):
+        with self.assertRaises(SystemExit) as cm:
+            with patch('sys.argv', ['prep.py', 'content']):
+                prep.main()
+        self.assertEqual(cm.exception.code, 1)
+
+    def test_all_without_profile_errors(self):
+        with self.assertRaises(SystemExit) as cm:
+            with patch('sys.argv', ['prep.py', 'all']):
+                prep.main()
+        self.assertEqual(cm.exception.code, 1)
+
+    def test_add_without_profile_errors(self):
+        with self.assertRaises(SystemExit) as cm:
+            with patch('sys.argv', ['prep.py', 'add', 'file.md']):
+                prep.main()
+        self.assertEqual(cm.exception.code, 1)
+
+    def test_status_without_profile_ok(self):
+        """Non-API commands should work without --profile."""
+        # status should not error about missing --profile
+        with patch('sys.argv', ['prep.py', 'status']):
+            # May error for other reasons but not --profile
+            try:
+                prep.main()
+            except SystemExit as e:
+                self.assertNotEqual(str(e), "1",
+                    "status should not require --profile")
+
+
+class TestInitCreatesAdaptedStubs(_ProfileTestMixin, unittest.TestCase):
+    """cmd_init should create adapted/ directory with stub files."""
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self._save_profile_state()
+        self._orig_base = prep.BASE_DIR
+        prep.BASE_DIR = Path(self.tmpdir)
+
+    def tearDown(self):
+        prep.BASE_DIR = self._orig_base
+        self._restore_profile_state()
+        shutil.rmtree(self.tmpdir)
+
+    def test_init_creates_adapted_dir(self):
+        prep.cmd_init("newprof")
+        adapted_dir = Path(self.tmpdir) / "profiles" / "newprof" / "adapted"
+        self.assertTrue(adapted_dir.is_dir())
+
+    def test_init_creates_four_stub_files(self):
+        prep.cmd_init("newprof")
+        adapted_dir = Path(self.tmpdir) / "profiles" / "newprof" / "adapted"
+        expected = {"seeds.md", "coverage.md", "lenses.md", "gem-sections.md"}
+        actual = {f.name for f in adapted_dir.iterdir() if f.suffix == ".md"}
+        self.assertEqual(actual, expected)
+
+    def test_init_stubs_are_detected_as_stubs(self):
+        prep.cmd_init("newprof")
+        adapted_dir = Path(self.tmpdir) / "profiles" / "newprof" / "adapted"
+        for fname in ["seeds.md", "coverage.md", "lenses.md", "gem-sections.md"]:
+            self.assertTrue(prep._is_stub(adapted_dir / fname),
+                f"{fname} should be detected as stub")
+
+    def test_init_stubs_contain_guidance(self):
+        prep.cmd_init("newprof")
+        adapted_dir = Path(self.tmpdir) / "profiles" / "newprof" / "adapted"
+        for fname in ["seeds.md", "coverage.md", "lenses.md", "gem-sections.md"]:
+            text = (adapted_dir / fname).read_text(encoding="utf-8")
+            self.assertIn("intake.md", text, f"{fname} should reference intake.md")
+
+
+class TestSecurityInfraAdapted(unittest.TestCase):
+    """Reference profile should have complete adapted files."""
+
+    _ADAPTED_DIR = Path(__file__).parent / "profiles" / "security-infra" / "adapted"
+
+    @unittest.skipUnless(
+        (Path(__file__).parent / "profiles" / "security-infra" / "adapted").exists(),
+        "Security-infra adapted/ not available"
+    )
+    def test_all_four_files_exist(self):
+        for fname in ["seeds.md", "coverage.md", "lenses.md", "gem-sections.md"]:
+            self.assertTrue((self._ADAPTED_DIR / fname).exists(), f"{fname} missing")
+
+    @unittest.skipUnless(
+        (Path(__file__).parent / "profiles" / "security-infra" / "adapted").exists(),
+        "Security-infra adapted/ not available"
+    )
+    def test_files_are_not_stubs(self):
+        for fname in ["seeds.md", "coverage.md", "lenses.md", "gem-sections.md"]:
+            self.assertFalse(prep._is_stub(self._ADAPTED_DIR / fname),
+                f"{fname} should not be a stub")
+
+    @unittest.skipUnless(
+        (Path(__file__).parent / "profiles" / "security-infra" / "adapted").exists(),
+        "Security-infra adapted/ not available"
+    )
+    def test_seeds_has_episodes(self):
+        orig_base = prep.BASE_DIR
+        try:
+            prep.BASE_DIR = Path(__file__).parent
+            adapted = prep._load_adapted("security-infra")
+            self.assertIn("DOMAIN_SEEDS", adapted)
+            self.assertIn("Episode 1:", adapted["DOMAIN_SEEDS"])
+        finally:
+            prep.BASE_DIR = orig_base
+
+    @unittest.skipUnless(
+        (Path(__file__).parent / "profiles" / "security-infra" / "adapted").exists(),
+        "Security-infra adapted/ not available"
+    )
+    def test_all_expected_markers_present(self):
+        """All markers referenced by prompts should be in the adapted content."""
+        orig_base = prep.BASE_DIR
+        try:
+            prep.BASE_DIR = Path(__file__).parent
+            adapted = prep._load_adapted("security-infra")
+            expected_markers = [
+                "DOMAIN_SEEDS", "COVERAGE_FRAMEWORK",
+                "DOMAIN_LENS", "NITTY_GRITTY_LAYOUT", "DOMAIN_REQUIREMENTS",
+                "DISTILL_REQUIREMENTS", "STAKEHOLDERS",
+                "GEM_BOOKSHELF", "GEM_EXAMPLES", "GEM_CODING", "GEM_FORMAT_EXAMPLES",
+            ]
+            for m in expected_markers:
+                self.assertIn(m, adapted, f"Marker {m} not found in adapted content")
+        finally:
+            prep.BASE_DIR = orig_base
+
+
+class TestRenderWithProfileInjects(_ProfileTestMixin, unittest.TestCase):
+    """render_template should inject adapted content when profile is active."""
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self._save_profile_state()
+        self._orig_base = prep.BASE_DIR
+        prep.BASE_DIR = Path(self.tmpdir)
+
+    def tearDown(self):
+        prep.BASE_DIR = self._orig_base
+        self._restore_profile_state()
+        shutil.rmtree(self.tmpdir)
+
+    def test_render_injects_adapted(self):
+        prep._ADAPTED = {"FOO_MARKER": "injected-value"}
+        template = "prefix {FOO_MARKER} suffix"
+        result = prep.render_template(template)
+        self.assertIn("injected-value", result)
+        self.assertNotIn("{FOO_MARKER}", result)
+
+    def test_render_injects_role_and_adapted(self):
+        prep._ADAPTED = {"DOMAIN_LENS": "test lens value"}
+        template = "role={PREP_ROLE} lens={DOMAIN_LENS}"
+        result = prep.render_template(template)
+        self.assertIn(prep.ROLE, result)
+        self.assertIn("test lens value", result)
 
 
 if __name__ == "__main__":

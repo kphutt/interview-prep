@@ -40,11 +40,7 @@ Generate an agenda with EXACTLY these 7 components, in this order:
 
 ### Nitty Gritty
 - 8–14 bullets MAX. Must include at least:
-  - 2 concrete protocol/crypto details (headers, claims, handshakes, certs, algorithms)
-  - 2 data-plane or caching details (cache keys, invalidation, TTLs, state management)
-  - 2 operational details (logs, metrics, SLOs, alerting, rollout/canary, failure modes)
-  - 1 policy/control detail (least privilege, approvals, audit, compliance)
-  - 1 explicit threat or failure mode
+{DISTILL_REQUIREMENTS}
 - If the source document uses vendor-specific terms, include:
   "Industry Equivalent: <generic term(s) and common analogs>" (<= 2 lines)
 
@@ -68,8 +64,8 @@ DISTILLATION RULES
 - If the document covers multiple topics, pick the ONE most interview-relevant and go deep.
 - Convert assertions into trade-offs (not "X is good" but "X vs Y under constraint Z").
 - Convert features into failure modes (not "supports rotation" but "rotation breaks when...").
-- Convert recommendations into scenarios (not "use mTLS" but "you inherit a fleet that doesn't have mTLS and must migrate under...").
-- Do NOT pad with generic security advice. Every bullet must be specific to the source material.
+- Convert recommendations into scenarios (not "use X" but "you inherit a system without X and must migrate under...").
+- Do NOT pad with generic advice. Every bullet must be specific to the source material.
 
 =====================
 QUALITY SELF-CHECK (run silently; revise until true)
@@ -77,7 +73,7 @@ QUALITY SELF-CHECK (run silently; revise until true)
 - I output ONLY the 7-section agenda, nothing else.
 - Every section has real protocols/claims/mechanisms from the source (not vague generalities).
 - The agenda includes RRK elements (ops, risk, influence) woven into existing sections.
-- L4 Trap calls out "security-only thinking" failure.
+- L4 Trap calls out domain-only (vs. operational/business) thinking failure.
 - Scenario Challenge forces clarifying questions, assumptions, and a rollout + incident plan.
 - No section violates its length limits.
 - Tone is an internal technical briefing: no fluff, no marketing voice.

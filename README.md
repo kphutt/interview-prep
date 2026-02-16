@@ -2,11 +2,11 @@
 
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue?logo=python&logoColor=white)](https://www.python.org)
 [![License: MIT](https://img.shields.io/badge/license-MIT-yellow.svg)](LICENSE)
-[![Tests: 128 passed](https://img.shields.io/badge/tests-128_passed-brightgreen)]()
+[![Tests: 291 passed](https://img.shields.io/badge/tests-291_passed-brightgreen)]()
 
-A prompt-engineering pipeline that generates technical deep-dive content using OpenAI's Responses API, packaged for NotebookLM podcasts and a Gemini coaching bot.
+A prompt-engineering pipeline that generates technical deep-dive content using OpenAI's Responses API, packaged for NotebookLM podcasts and a Gemini coaching bot. Works for any interview domain via profiles.
 
-The prompts are the crown jewels — they define episode structure, depth targets, and quality self-checks that consistently produce Staff-level technical content. The repo ships with 15 episodes of Security & Infrastructure content (already generated). The pipeline is being generalized to support any domain via [profiles](docs/design/profiles/).
+The prompts are the crown jewels — they define episode structure, depth targets, and quality self-checks that consistently produce Staff-level technical content. The repo ships with 15 episodes of Security & Infrastructure content as a reference profile.
 
 ## Quick Start
 
@@ -19,81 +19,151 @@ cp .env.example .env
 # Load config
 set -a && source .env && set +a
 
-python prep.py all
+# Create a profile for your domain
+python prep.py init my-domain
+
+# Generate adapted content (see "Adapting to a New Domain" below)
+# Then generate everything:
+python prep.py all --profile my-domain
 ```
 
-## Configure Your Target Role
+## Profiles
 
-Edit `.env` to set your interview target:
+Every interview domain lives in its own profile under `profiles/<name>/`. A profile contains:
 
-```bash
-PREP_ROLE="Principal SRE"
-PREP_COMPANY="Meta"
-PREP_DOMAIN="Reliability & Infrastructure"
+```
+profiles/my-domain/
+  profile.md           <- Config: role, company, domain, model, episode counts
+  adapted/             <- Domain-specific content injected into shared prompts
+    seeds.md             Episode seed data (12 episodes)
+    coverage.md          Coverage framework (e.g., CISSP, DAMA-DMBOK)
+    lenses.md            Domain lens, Nitty Gritty layout, requirements, stakeholders
+    gem-sections.md      Gem coaching bot: bookshelf, examples, format
+  inputs/              <- Pre-existing files (pipeline skips what exists)
+    agendas/
+    episodes/
+    misc/
+  outputs/             <- Generated content
+    syllabus/            Episode agendas
+    episodes/            Full content documents
+    gem/                 Merged episode pairs for Gem knowledge files
+    notebooklm/          Individual episode files for NotebookLM
+    raw/                 Raw API responses (backup)
 ```
 
-These variables flow into system instructions and prompt templates — they control the tone and framing of generated content (e.g., "You are preparing for a Principal SRE interview at Meta"). They don't change the domain-specific training data in the prompts; see [Adapting to a New Domain](#adapting-to-a-new-domain) for that.
+The reference profile `profiles/security-infra/` ships with complete adapted files and generated content.
 
 ## Commands
 
+All API commands (`all`, `syllabus`, `content`, `add`) require `--profile`.
+
 | Command | What it does |
 |---------|-------------|
-| `prep.py all` | Full pipeline: syllabus -> content -> package |
-| `prep.py syllabus` | Generate agendas only (8 API calls) |
-| `prep.py content` | Generate content for existing agendas |
-| `prep.py add paper.pdf --gem-slot 3` | Distill doc -> content -> package |
-| `prep.py package` | Repackage into Gem + NotebookLM |
-| `prep.py render prompts/gem.md` | Substitute env vars and print to stdout |
-| `prep.py status` | Show what exists |
+| `prep.py init <name>` | Create new profile skeleton with adapted/ stubs |
+| `prep.py all --profile P` | Full pipeline: syllabus -> content -> package |
+| `prep.py syllabus --profile P` | Generate agendas only (8 API calls) |
+| `prep.py content --profile P` | Generate content for existing agendas |
+| `prep.py content --profile P --episode 5` | Generate content for one episode |
+| `prep.py add doc.pdf --profile P` | Distill doc -> content -> package |
+| `prep.py package --profile P` | Repackage outputs into Gem + NotebookLM |
+| `prep.py render prompts/gem.md --profile P` | Substitute vars and print to stdout |
+| `prep.py status` | List all profiles |
+| `prep.py status --profile P` | Show pipeline progress for a profile |
 
-## Output
-
-```
-outputs/
-  syllabus/      <- Episode agendas (source of truth for content gen)
-  episodes/      <- Full content documents (canonical)
-  raw/           <- Raw API responses (backup)
-  notebooklm/    <- Individual episode files (copied from episodes/ by `package`)
-  gem/           <- Merged episode pairs (derived from episodes/ by `package`)
-    gem-1.md       episodes 1-2
-    gem-2.md       episodes 3-4
-    gem-3.md       episodes 5-6
-    gem-4.md       episodes 7-8
-    gem-5.md       episodes 9-10
-    gem-6.md       episodes 11-12
-    gem-7.md       frontiers 13-15
-    gem-8.md       misc
-```
-
-## Existing Files
-
-Drop into `inputs/` with these names — pipeline skips what exists:
-- `inputs/agendas/episode-01-agenda.md`
-- `inputs/episodes/episode-01-content.md`
-
-## Environment
-
-| Variable | Default | Notes |
-|----------|---------|-------|
-| Python | 3.9+ | Required |
-| OPENAI_API_KEY | (required) | Get from platform.openai.com |
-| OPENAI_MODEL | gpt-5.2-pro | Uses Responses API |
-| OPENAI_EFFORT | xhigh | Reasoning effort: xhigh, high, medium, low |
-| OPENAI_MAX_TOKENS | 16000 | Max output tokens |
-| AS_OF_DATE | Feb 2026 | For frontier digests |
-| PREP_ROLE | Staff Engineer | Target role — used in system instructions |
-| PREP_COMPANY | a top tech company | Target company — used in system instructions |
-| PREP_DOMAIN | Security & Infrastructure | Interview domain — used in system instructions |
+Common flags: `--force` (regenerate existing), `--yes` (skip cost confirmation).
 
 ## Adapting to a New Domain
 
-Changing the `PREP_` env vars adjusts system instruction framing but doesn't change the underlying domain content. A full domain switch also requires:
+### 1. Create a profile
 
-- **Training data in `prompts/syllabus.md`** — ~120 lines of episode seeds calibrated to Security & Infrastructure
-- **Episode count** — hardcoded to 15 (12 core + 3 frontier) in `prep.py` and `syllabus.md`
-- **Platform prompts** — the Gem Bookshelf (`prompts/gem.md`) and NotebookLM frames (`prompts/notebooklm-frames.md`) are written for Security & Infrastructure
+```bash
+python prep.py init data-eng
+```
 
-The [profiles](docs/design/profiles/) initiative is designed to make this end-to-end: a single profile config that drives domain content, episode count, and platform prompts.
+This creates `profiles/data-eng/` with a template `profile.md` and 4 stub files in `adapted/`.
+
+### 2. Generate adapted content
+
+Paste `prompts/intake.md` into any AI chat (ChatGPT, Claude, Gemini). The intake prompt interviews you about your role, domain, and sub-areas, then generates all 5 files (`profile.md` + 4 adapted files) ready to copy-paste into your profile directory.
+
+Cost: $0 — the intake runs in an external conversation, not through the pipeline.
+
+### 3. Fill in your profile
+
+Save the generated files:
+- `profiles/data-eng/profile.md`
+- `profiles/data-eng/adapted/seeds.md`
+- `profiles/data-eng/adapted/coverage.md`
+- `profiles/data-eng/adapted/lenses.md`
+- `profiles/data-eng/adapted/gem-sections.md`
+
+### 4. Generate content
+
+```bash
+# Test run with a cheap model first
+python prep.py syllabus --profile data-eng --yes
+
+# Review agendas in profiles/data-eng/outputs/syllabus/
+# If satisfied, generate full content:
+python prep.py all --profile data-eng --yes
+```
+
+### Adapted file format
+
+Adapted files use `<!-- MARKER_NAME -->` HTML comment delimiters to define sections. Each marker corresponds to a placeholder in the shared prompt templates. See `profiles/security-infra/adapted/` for a complete example.
+
+| File | Markers | Injected into |
+|------|---------|--------------|
+| `seeds.md` | `DOMAIN_SEEDS` | syllabus.md |
+| `coverage.md` | `COVERAGE_FRAMEWORK` | syllabus.md |
+| `lenses.md` | `DOMAIN_LENS`, `NITTY_GRITTY_LAYOUT`, `DOMAIN_REQUIREMENTS`, `DISTILL_REQUIREMENTS`, `STAKEHOLDERS` | content.md, distill.md |
+| `gem-sections.md` | `GEM_BOOKSHELF`, `GEM_EXAMPLES`, `GEM_CODING`, `GEM_FORMAT_EXAMPLES` | gem.md |
+
+## Using the Outputs
+
+### NotebookLM Podcasts
+
+Each episode content document becomes a podcast source. For each episode:
+1. Create a new NotebookLM notebook
+2. Upload the episode content file from `outputs/episodes/`
+3. Paste the episode frame from `prompts/notebooklm-frames.md` + the system prompt from `prompts/notebooklm.md`
+4. Generate the podcast
+
+### Gemini Gem Coaching Bot
+
+The Gem acts as an interview coach with two personas, three modes, and a concept tracking system:
+1. Render the Gem prompt: `python prep.py render prompts/gem.md --profile <name>`
+2. Create a Gemini Gem, paste the rendered prompt as system instructions
+3. Upload the gem files from `outputs/gem/` as knowledge files
+4. Start a session: "rapid fire", "interview", or "explore"
+
+## Cost Estimates
+
+The pipeline shows a cost estimate before making API calls. Use `--yes` to skip confirmation.
+
+| Model | Full pipeline (~20 calls) | Syllabus only (~8 calls) |
+|-------|--------------------------|-------------------------|
+| gpt-5.2-pro (xhigh) | ~$25-30 | ~$10-15 |
+| gpt-5.2 (high) | ~$5-10 | ~$2-5 |
+| gpt-4o-mini | ~$0.30 | ~$0.15 |
+
+Tip: test with `gpt-4o-mini` first to validate your adapted content, then regenerate with a stronger model.
+
+## Environment Variables
+
+| Variable | Default | Notes |
+|----------|---------|-------|
+| `OPENAI_API_KEY` | (required) | Get from platform.openai.com |
+| `OPENAI_MODEL` | gpt-5.2-pro | Overridden by profile config |
+| `OPENAI_EFFORT` | xhigh | Reasoning effort: xhigh, high, medium, low |
+| `OPENAI_MAX_TOKENS` | 16000 | Max output tokens |
+| `AS_OF_DATE` | Feb 2026 | For frontier digests |
+| `PREP_ROLE` | Staff Engineer | Overridden by profile config |
+| `PREP_COMPANY` | a top tech company | Overridden by profile config |
+| `PREP_DOMAIN` | Security & Infrastructure | Overridden by profile config |
+| `PREP_AUDIENCE` | Senior Software Engineers | Overridden by profile config |
+
+When using `--profile`, values in `profile.md` take precedence over env vars.
 
 ## Tests
 
@@ -101,23 +171,23 @@ The [profiles](docs/design/profiles/) initiative is designed to make this end-to
 python -m unittest test_prep -v
 ```
 
-128 tests covering prompt assembly, template structure, file helpers, skip/resume logic, packaging, manifest generation, and edge cases.
+291 tests covering prompt assembly, template structure, adapted file injection, preflight validation, profile management, file helpers, skip/resume logic, packaging, manifest generation, and edge cases.
 
 ## Platform Prompts
 
-The `prompts/` directory includes system prompts for the study tools that consume the generated content:
+The `prompts/` directory includes:
 
-- **`prompts/gem.md`** — Gemini Gem: an interview coach with two personas (Domain Expert + RRK), three modes (Interview, Rapid Fire, Explore), and a concept tracking system with Status Reports
-- **`prompts/notebooklm.md`** — NotebookLM: podcast generation prompt that turns episode content into two-host technical deep-dives
-- **`prompts/notebooklm-frames.md`** — Per-episode frames (format, central argument, stakes) pasted above the prompt for each podcast run
+| Prompt | Purpose |
+|--------|---------|
+| `syllabus.md` | Syllabus generation (8 chunked runs: scaffold, core batches, frontiers, merge) |
+| `content.md` | Episode content generation (dense Staff-level technical documents) |
+| `distill.md` | Document distillation (whitepaper/blog -> episode agenda) |
+| `gem.md` | Gemini Gem coaching bot system prompt |
+| `notebooklm.md` | NotebookLM podcast generation prompt |
+| `notebooklm-frames.md` | Per-episode podcast frames |
+| `intake.md` | Domain intake interview (generates adapted files, $0 cost) |
 
-Both use `{PREP_ROLE}`, `{PREP_DOMAIN}`, etc. placeholders. Use `render` to substitute your env vars and copy to clipboard:
-
-```bash
-python prep.py render prompts/gem.md | pbcopy
-```
-
-The Gem's Bookshelf and example questions are written for Security & Infrastructure; adapt to your domain.
+All prompts use `{PLACEHOLDER}` syntax. Role/company/domain vars are replaced first, then adapted domain content, then user content. This ordering prevents double-replacement when user content contains `{braces}`.
 
 ## API Details
 
@@ -127,11 +197,10 @@ Uses the OpenAI **Responses API** (not Chat Completions) with:
 - `background: true` — no timeout risk, polls until done
 
 Each call may take 1-5 minutes with Pro + xhigh effort.
-Full pipeline (~20 calls) takes roughly 30-60 minutes.
-Cost: ~$25-30 for full generation with gpt-5.2-pro.
 
-To reduce cost:
-```bash
-export OPENAI_MODEL='gpt-5.2'
-export OPENAI_EFFORT='high'
-```
+## Design Docs
+
+Design documents live in `docs/design/`. Convention:
+- `backlog.md` — Ideas not yet tied to an initiative
+- `{initiative}/brainstorm.md` — Exploration, specs, open questions
+- `{initiative}/decisions.md` — Settled choices (append-only)

@@ -149,6 +149,88 @@ def _listening_order_str():
     return " -> ".join(parts)
 
 # ---------------------------------------------------------------------------
+# ADAPTED CONTENT (domain-specific prompt injection)
+# ---------------------------------------------------------------------------
+_ADAPTED = {}  # marker -> content, populated by set_profile()
+
+# Stub comment prefix — files starting with this are considered empty stubs
+_ADAPTED_STUB_PREFIX = "<!-- STUB:"
+
+def _parse_adapted_sections(text):
+    """Parse <!-- MARKER --> delimited sections from adapted file content."""
+    result = {}
+    current_marker = None
+    current_lines = []
+    for line in text.split("\n"):
+        stripped = line.strip()
+        if re.match(r"^<!--\s+(\w+)\s+-->$", stripped):
+            if current_marker:
+                result[current_marker] = "\n".join(current_lines).strip()
+            current_marker = re.match(r"^<!--\s+(\w+)\s+-->$", stripped).group(1)
+            current_lines = []
+        elif current_marker is not None:
+            current_lines.append(line)
+    if current_marker:
+        result[current_marker] = "\n".join(current_lines).strip()
+    return result
+
+
+def _load_adapted(profile_name):
+    """Load adapted files from profiles/{name}/adapted/. Returns dict of marker->content."""
+    adapted_dir = BASE_DIR / "profiles" / profile_name / "adapted"
+    result = {}
+    if not adapted_dir.is_dir():
+        return result
+    for f in sorted(adapted_dir.iterdir()):
+        if f.suffix == ".md":
+            text = f.read_text(encoding="utf-8")
+            sections = _parse_adapted_sections(text)
+            if not sections:
+                print(f"  WARNING: {f.name} has no <!-- MARKER --> sections")
+            result.update(sections)
+    return result
+
+
+def _inject_adapted(text, adapted=None):
+    """Replace {MARKER} placeholders with adapted content."""
+    if adapted is None:
+        adapted = _ADAPTED
+    for marker, content in adapted.items():
+        text = text.replace("{" + marker + "}", content)
+    return text
+
+
+def _is_stub(filepath):
+    """Check if an adapted file is a stub (starts with STUB comment)."""
+    if not filepath.exists():
+        return True
+    text = filepath.read_text(encoding="utf-8").strip()
+    return not text or text.startswith(_ADAPTED_STUB_PREFIX)
+
+
+def _preflight_check(profile_name, command, force=False):
+    """Validate profile completeness before API calls. Errors early to avoid wasted spend."""
+    profile_dir = BASE_DIR / "profiles" / profile_name
+    adapted_dir = profile_dir / "adapted"
+
+    # 1. Adapted files exist and are non-stub
+    adapted_files = ["seeds.md", "coverage.md", "lenses.md", "gem-sections.md"]
+    for name in adapted_files:
+        f = adapted_dir / name
+        if _is_stub(f):
+            print(f"ERROR: adapted/{name} is empty or missing.")
+            print(f"  Run the intake prompt first — see prompts/intake.md")
+            sys.exit(1)
+
+    # 2. Prompt files exist
+    for prompt_name in ["syllabus", "content", "distill"]:
+        p = PROMPTS / f"{prompt_name}.md"
+        if not p.exists():
+            print(f"ERROR: {p} not found")
+            sys.exit(1)
+
+
+# ---------------------------------------------------------------------------
 # PROFILES
 # ---------------------------------------------------------------------------
 _PROFILE_KNOWN_FIELDS = {
@@ -222,8 +304,12 @@ def set_profile(name):
     global OUTPUTS, SYLLABUS_DIR, EPISODES_DIR, GEM_DIR, NLM_DIR, RAW_DIR
     global IN_AGENDAS, IN_EPISODES, IN_MISC
     global ROLE, COMPANY, DOMAIN, AUDIENCE, MODEL, EFFORT, AS_OF
+    global _ADAPTED
 
     config = load_profile(name)
+
+    # Load adapted content for domain injection
+    _ADAPTED = _load_adapted(name)
 
     # Redirect directories to profile paths (PROMPTS stays shared)
     profile_dir = BASE_DIR / "profiles" / name
@@ -264,29 +350,50 @@ EFFORT = os.environ.get("OPENAI_EFFORT", "xhigh")  # xhigh | high | medium | low
 VERBOSITY = os.environ.get("OPENAI_VERBOSITY", "")   # "" = auto-detect from model
 MAX_OUTPUT = int(os.environ.get("OPENAI_MAX_TOKENS", "16000"))
 
-# Model family capabilities: (supports_reasoning, default_verbosity)
+# Model family capabilities: (supports_reasoning, default_verbosity, allowed_efforts)
 _MODEL_CAPS = {
-    "gpt-5.2":   (True,  "high"),
-    "o3":        (True,  "medium"),
-    "o4-mini":   (True,  "medium"),
-    "o4":        (True,  "medium"),
-    "gpt-4.1":   (False, None),
-    "gpt-4o":    (False, None),
+    "gpt-5.2-pro": (True,  "high",   {"medium", "high", "xhigh"}),
+    "gpt-5.2":     (True,  "high",   {"none", "low", "medium", "high", "xhigh"}),
+    "o3":          (True,  "medium", {"low", "medium", "high"}),
+    "o4-mini":     (True,  "medium", {"low", "medium", "high"}),
+    "o4":          (True,  "medium", {"low", "medium", "high"}),
+    "gpt-4.1":     (False, None,     None),
+    "gpt-4o-mini": (False, None,     None),
+    "gpt-4o":      (False, None,     None),
 }
+
+_EFFORT_SCALE = ["none", "low", "medium", "high", "xhigh"]
+
+def _clamp_effort(effort, allowed):
+    """Clamp effort to nearest valid level. Returns (value, was_clamped)."""
+    if allowed is None or effort in allowed:
+        return effort, False
+    idx = _EFFORT_SCALE.index(effort) if effort in _EFFORT_SCALE else 2
+    # Search outward: up first (higher effort is safer than lower)
+    for dist in range(1, len(_EFFORT_SCALE)):
+        for candidate_idx in [idx + dist, idx - dist]:
+            if 0 <= candidate_idx < len(_EFFORT_SCALE):
+                candidate = _EFFORT_SCALE[candidate_idx]
+                if candidate in allowed:
+                    return candidate, True
+    return effort, False  # shouldn't happen
 
 def _model_capabilities(model):
     """Build optional kwargs for responses.create() based on model name."""
     # Match longest prefix
-    supports_reasoning, default_verbosity = True, None  # safe fallback
+    supports_reasoning, default_verbosity, allowed_efforts = True, None, None
     best_len = 0
     for prefix, caps in _MODEL_CAPS.items():
         if model.startswith(prefix) and len(prefix) > best_len:
-            supports_reasoning, default_verbosity = caps
+            supports_reasoning, default_verbosity, allowed_efforts = caps
             best_len = len(prefix)
 
     kwargs = {}
     if supports_reasoning:
-        kwargs["reasoning"] = {"effort": EFFORT}
+        effort, clamped = _clamp_effort(EFFORT, allowed_efforts)
+        if clamped:
+            print(f"  WARNING: effort '{EFFORT}' not supported by {model}, using '{effort}'")
+        kwargs["reasoning"] = {"effort": effort}
 
     verbosity = VERBOSITY or default_verbosity
     if verbosity and verbosity != "none":
@@ -311,7 +418,9 @@ def get_client():
 def call_llm(client, instructions, user_input, label="", retries=3):
     """Call OpenAI Responses API with background mode + polling."""
     model_kwargs = _model_capabilities(MODEL)
-    for attempt in range(retries):
+    attempt = 0
+    stripped = False
+    while attempt < retries:
         try:
             if label: print(f"  -> {MODEL} (effort={EFFORT}): {label}...")
 
@@ -359,11 +468,21 @@ def call_llm(client, instructions, user_input, label="", retries=3):
             return text
 
         except Exception as e:
+            # One-shot: strip reasoning/text kwargs on BadRequestError
+            from openai import BadRequestError
+            if isinstance(e, BadRequestError) and not stripped:
+                model_kwargs.pop("reasoning", None)
+                model_kwargs.pop("text", None)
+                stripped = True
+                print(f"  WARNING: bad request, retrying without reasoning/text params")
+                continue  # don't consume an attempt
+
             wait = 2 ** (attempt + 1)
             print(f"     ERROR ({attempt+1}/{retries}): {e}")
             if attempt < retries - 1:
                 print(f"     retry in {wait}s...")
                 time.sleep(wait)
+            attempt += 1
     print(f"     FAILED after {retries} attempts")
     return None
 
@@ -395,6 +514,8 @@ def syllabus_prompt(run):
     t = t.replace("{FRONTIER_RANGE}", _frontier_range_str())
     t = t.replace("{FRONTIER_MAP}", _frontier_map_str())
     t = t.replace("{LISTENING_ORDER}", _listening_order_str())
+    # Adapted domain content
+    t = _inject_adapted(t)
     return t
 
 def content_prompt(agenda, notes=""):
@@ -404,6 +525,8 @@ def content_prompt(agenda, notes=""):
     t = t.replace("{ROLE}", ROLE)
     t = t.replace("{COMPANY}", COMPANY)
     t = t.replace("{AS_OF_DATE}", AS_OF)
+    # Adapted domain content (after role vars, before user content)
+    t = _inject_adapted(t)
     t = t.replace("{EXTRA_NOTES}", notes or "- No additional notes.")
     t = t.replace("{EPISODE_AGENDA}", agenda)
     return t
@@ -415,6 +538,8 @@ def distill_prompt(raw):
     t = t.replace("{ROLE}", ROLE)
     t = t.replace("{COMPANY}", COMPANY)
     t = t.replace("{DOMAIN}", DOMAIN)
+    # Adapted domain content (after role vars, before user content)
+    t = _inject_adapted(t)
     t = t.replace("{RAW_DOCUMENT}", raw)
     return t
 
@@ -426,6 +551,8 @@ def render_template(text):
     t = t.replace("{PREP_DOMAIN}", DOMAIN)
     t = t.replace("{PREP_AUDIENCE}", AUDIENCE)
     t = t.replace("{AS_OF_DATE}", AS_OF)
+    # Adapted domain content (for gem.md etc.)
+    t = _inject_adapted(t)
     return t
 
 def _syllabus_instructions():
@@ -837,11 +964,13 @@ def cmd_status(profile_name=None):
 
 # Cost per API call by model prefix (rough estimates in USD)
 _COST_PER_CALL = {
+    "gpt-5.2-pro": 2.00,
     "gpt-5.2": 1.50,
     "o3": 2.00,
     "o4-mini": 0.20,
     "o4": 1.00,
     "gpt-4.1": 0.50,
+    "gpt-4o-mini": 0.02,
     "gpt-4o": 0.30,
 }
 
@@ -940,7 +1069,7 @@ def write_manifest():
 
 
 def cmd_init(name):
-    """Create a new profile skeleton with template profile.md."""
+    """Create a new profile skeleton with template profile.md and adapted/ stubs."""
     profile_dir = BASE_DIR / "profiles" / name
     if profile_dir.exists():
         print(f"ERROR: profile '{name}' already exists at {profile_dir}/")
@@ -949,7 +1078,8 @@ def cmd_init(name):
     # Create directory structure
     for subdir in ["inputs/agendas", "inputs/episodes", "inputs/misc",
                    "outputs/syllabus", "outputs/episodes", "outputs/gem",
-                   "outputs/notebooklm", "outputs/raw"]:
+                   "outputs/notebooklm", "outputs/raw",
+                   "adapted"]:
         (profile_dir / subdir).mkdir(parents=True, exist_ok=True)
 
     # Write template profile.md
@@ -971,6 +1101,42 @@ def cmd_init(name):
     )
     (profile_dir / "profile.md").write_text(template, encoding="utf-8")
 
+    # Write adapted/ stub files with guidance comments
+    _stubs = {
+        "seeds.md": (
+            "<!-- STUB: Episode seed data for syllabus generation -->\n"
+            "<!-- Replace this file with your domain's episode seeds.\n"
+            "     Use <!-- DOMAIN_SEEDS --> as the section header.\n"
+            "     See profiles/security-infra/adapted/seeds.md for an example.\n"
+            "     Generate this file using prompts/intake.md in any AI chat. -->\n"
+        ),
+        "coverage.md": (
+            "<!-- STUB: Coverage framework for syllabus generation -->\n"
+            "<!-- Replace this file with your domain's coverage framework.\n"
+            "     Use <!-- COVERAGE_FRAMEWORK --> as the section header.\n"
+            "     See profiles/security-infra/adapted/coverage.md for an example.\n"
+            "     Generate this file using prompts/intake.md in any AI chat. -->\n"
+        ),
+        "lenses.md": (
+            "<!-- STUB: Domain lenses for content and distill prompts -->\n"
+            "<!-- Replace this file with your domain's lenses.\n"
+            "     Required sections: <!-- DOMAIN_LENS -->, <!-- NITTY_GRITTY_LAYOUT -->,\n"
+            "     <!-- DOMAIN_REQUIREMENTS -->, <!-- DISTILL_REQUIREMENTS -->, <!-- STAKEHOLDERS -->\n"
+            "     See profiles/security-infra/adapted/lenses.md for an example.\n"
+            "     Generate this file using prompts/intake.md in any AI chat. -->\n"
+        ),
+        "gem-sections.md": (
+            "<!-- STUB: Domain-specific Gem coaching bot sections -->\n"
+            "<!-- Replace this file with your domain's gem sections.\n"
+            "     Required sections: <!-- GEM_BOOKSHELF -->, <!-- GEM_EXAMPLES -->,\n"
+            "     <!-- GEM_CODING -->, <!-- GEM_FORMAT_EXAMPLES -->\n"
+            "     See profiles/security-infra/adapted/gem-sections.md for an example.\n"
+            "     Generate this file using prompts/intake.md in any AI chat. -->\n"
+        ),
+    }
+    for fname, content in _stubs.items():
+        (profile_dir / "adapted" / fname).write_text(content, encoding="utf-8")
+
     print(f"Created profile '{name}' at {profile_dir}/")
     print(f"""
 Next steps:
@@ -978,8 +1144,9 @@ Next steps:
        {profile_dir / 'profile.md'}
      Fill in role, company, domain, and other fields.
 
-  2. Add your job description (optional):
-       cp your-jd.md {profile_dir / 'inputs'}/job-description.md
+  2. Generate domain-specific content:
+       Paste prompts/intake.md into any AI chat.
+       Save the generated files into {profile_dir / 'adapted'}/
 
   3. Check your profile:
        python prep.py status --profile {name}
@@ -1032,6 +1199,13 @@ def main():
         cmd_init(name)
         return
 
+    # API commands require --profile
+    _API_COMMANDS = {"all", "syllabus", "content", "add"}
+    if args.command in _API_COMMANDS and not args.profile:
+        print(f"ERROR: --profile required for '{args.command}'.")
+        print(f"  Run 'python prep.py init <name>' to create a profile.")
+        sys.exit(1)
+
     # Load profile if specified (redirects dirs + sets config)
     if args.profile:
         set_profile(args.profile)
@@ -1062,6 +1236,9 @@ def main():
             sys.exit(1)
         print(render_template(rp.read_text(encoding="utf-8")), end="")
         return
+
+    # Pre-flight validation before API calls (runs before get_client / cost confirmation)
+    _preflight_check(args.profile, args.command, args.force)
 
     client = get_client()
     force = args.force

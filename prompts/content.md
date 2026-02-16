@@ -9,7 +9,7 @@ IMPORTANT
 - Expand the agenda with concrete mechanisms, examples, and operational reality — but do NOT introduce entirely new topics not implied by the agenda.
 - Audience: Senior SWEs. Emphasize architecture, trade-offs, latency, and developer friction.
 - Every section must embed BOTH:
-  - Domain lens: identity/infrastructure mechanisms (protocols, architecture, threats)
+  - Domain lens: {DOMAIN_LENS}
   - RRK lens: risk prioritization under ambiguity, incident response/on-call reality, operational excellence/SRE thinking, stakeholder influence, policy/compliance trade-offs
   Do NOT create a new RRK section; weave RRK into the existing 7 sections.
 - No fluff: no motivational tone, no generic textbook definitions, no "podcast host" voice, no "in this podcast/interview" phrasing.
@@ -84,21 +84,12 @@ LENGTH + DEPTH GUIDANCE (STRICT)
 - 25–45 bullets MAX total.
 - Organize using 4–6 mini-subsections with bold mini-headings (inside this section only).
   - The required mini-subsections **Interviewer Probes (Staff-level)** and **Implementation / Code Review / Tests** COUNT toward this 4–6 total.
-  - To stay within 4–6, prefer a "canonical 6" layout like:
-    1) **Protocol / Wire Details**
-    2) **Data Plane / State / Caching**
-    3) **Threats & Failure Modes**
-    4) **Operations / SLOs / Rollout**
-    5) **Interviewer Probes (Staff-level)**
-    6) **Implementation / Code Review / Tests**
+  - To stay within 4–6, prefer a layout like:
+{NITTY_GRITTY_LAYOUT}
   - Policy/compliance/control details still MUST appear, but they can live as bullets inside Threats or Ops (no separate heading required).
 
 - Requirements inside Nitty Gritty (still within 25–45 bullets total):
-  - Include concrete protocol/crypto details (headers/claims/handshakes/certs/curves).
-  - Include concrete data-plane/state handling (cache keys, invalidation, TTLs, replay windows).
-  - Include explicit threats and concrete failure modes (what breaks, how it breaks).
-  - Include operational reality (logs/metrics/SLOs, paging triggers, canary/rollback, blast radius).
-  - Include at least one policy/control detail (least privilege, approvals, auditability, retention).
+{DOMAIN_REQUIREMENTS}
 
 - Portability rule: if the agenda references {COMPANY}-specific terms (e.g., GFE, Borg, ALTS), include a line:
   "Industry Equivalent: <generic term(s) and common analogs>"
@@ -123,7 +114,7 @@ LENGTH + DEPTH GUIDANCE (STRICT)
   - at least 2 competing architectures/approaches,
   - the decisive trade-off argument (why pick A over B under stated constraints),
   - explicit "what I'd measure" (latency, adoption, error rates, abuse rates, toil/on-call burden),
-  - a stakeholder/influence narrative (how you align Security, Product, SRE, Legal/Compliance),
+  - a stakeholder/influence narrative (how you align {STAKEHOLDERS}),
   - risk acceptance: what you do now vs later and why,
   - "what I would NOT do" (and why it's tempting but wrong).
 - Add experience tie-back prompts (do NOT invent personal stories):
