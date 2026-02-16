@@ -1894,5 +1894,107 @@ class TestDynamicConfig(unittest.TestCase):
         self.assertEqual(len(prep.SYLLABUS_RUNS), 8)
 
 
+class TestSyllabusPromptReplace(unittest.TestCase):
+    """Phase 2: .replace()-based syllabus_prompt + count placeholders."""
+
+    def tearDown(self):
+        prep._reconfigure()
+
+    def test_syllabus_prompt_with_braces_in_env_var(self):
+        """Braces in env vars should not raise (.format() would choke)."""
+        orig = prep.ROLE
+        prep.ROLE = "Engineer {L6}"
+        try:
+            run = dict(mode="SCAFFOLD", core="", frontier="")
+            result = prep.syllabus_prompt(run)
+            self.assertIn("Engineer {L6}", result)
+        finally:
+            prep.ROLE = orig
+
+    def test_syllabus_prompt_output_unchanged(self):
+        """With default 12+3 config, SCAFFOLD prompt should contain expected strings."""
+        run = dict(mode="SCAFFOLD", core="", frontier="")
+        result = prep.syllabus_prompt(run)
+        self.assertIn("MODE: SCAFFOLD", result)
+        self.assertIn(prep.ROLE, result)
+        self.assertIn("Episodes 1-12", result)
+        self.assertIn("13-15", result)
+
+    def test_syllabus_prompt_contains_dynamic_ranges(self):
+        """With 8+2, prompt should contain '1-8' not '1-12'."""
+        prep._reconfigure(8, 2)
+        run = dict(mode="SCAFFOLD", core="", frontier="")
+        result = prep.syllabus_prompt(run)
+        self.assertIn("1-8", result)
+        self.assertNotIn("1-12", result)
+        self.assertIn("9-10", result)
+        self.assertNotIn("13-15", result)
+
+    def test_syllabus_prompt_default_matches_current(self):
+        """With 12+3, '1-12' and '13-15' should appear."""
+        run = dict(mode="CORE_BATCH", core="1-4", frontier="")
+        result = prep.syllabus_prompt(run)
+        self.assertIn("1-12", result)
+        self.assertIn("13-15", result)
+
+    def test_no_stray_placeholders(self):
+        """Rendered prompt should have no unreplaced count placeholders."""
+        run = dict(mode="SCAFFOLD", core="", frontier="")
+        result = prep.syllabus_prompt(run)
+        for placeholder in ["{TOTAL_CORE}", "{CORE_RANGE}", "{FRONTIER_RANGE}",
+                            "{FRONTIER_MAP}", "{LISTENING_ORDER}"]:
+            self.assertNotIn(placeholder, result)
+
+
+class TestCountHelpers(unittest.TestCase):
+    """Phase 2: _frontier_range_str, _frontier_map_str, _listening_order_str."""
+
+    def tearDown(self):
+        prep._reconfigure()
+
+    def test_frontier_map_str_default(self):
+        result = prep._frontier_map_str()
+        self.assertIn("Digest A = Episode 13", result)
+        self.assertIn("Digest B = Episode 14", result)
+        self.assertIn("Digest C = Episode 15", result)
+        self.assertEqual(result.count("\n"), 2)  # 3 lines
+
+    def test_frontier_map_str_custom(self):
+        prep._reconfigure(8, 2)
+        result = prep._frontier_map_str()
+        self.assertIn("Digest A = Episode 9", result)
+        self.assertIn("Digest B = Episode 10", result)
+        self.assertNotIn("Episode 13", result)
+
+    def test_listening_order_default(self):
+        result = prep._listening_order_str()
+        self.assertIn("Episodes 1-4", result)
+        self.assertIn("Episode 13 (Frontier Digest A)", result)
+        self.assertIn("Episodes 5-8", result)
+        self.assertIn("Episode 14 (Frontier Digest B)", result)
+
+    def test_listening_order_custom(self):
+        prep._reconfigure(4, 1)
+        result = prep._listening_order_str()
+        self.assertIn("Episodes 1-4", result)
+        self.assertIn("Episode 5 (Frontier Digest A)", result)
+        self.assertNotIn("Episode 13", result)
+
+    def test_frontier_range_str_default(self):
+        self.assertEqual(prep._frontier_range_str(), "13-15")
+
+    def test_frontier_range_str_custom(self):
+        prep._reconfigure(8, 2)
+        self.assertEqual(prep._frontier_range_str(), "9-10")
+
+    def test_frontier_range_str_zero(self):
+        prep._reconfigure(8, 0)
+        self.assertEqual(prep._frontier_range_str(), "(none)")
+
+    def test_frontier_range_str_single(self):
+        prep._reconfigure(4, 1)
+        self.assertEqual(prep._frontier_range_str(), "5")
+
+
 if __name__ == "__main__":
     unittest.main()

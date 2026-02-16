@@ -20,11 +20,11 @@ The audience is {AUDIENCE}. Content must focus on Architecture, Trade-offs, Late
 
 CRITICAL FRAMING
 - This is NOT a textbook. It is Staff-level interview prep: crisp mental models + concrete mechanisms + trade-off arguments.
-- Every core episode (Episodes 1-12) must be both:
+- Every core episode (Episodes 1-{TOTAL_CORE}) must be both:
   - Domain: identity/infrastructure mechanics (protocols, architecture, threats).
   - RRK: role-related knowledge beyond identity (incident response judgment, risk prioritization under ambiguity, operational excellence/SRE thinking, stakeholder influence, and policy/compliance trade-offs).
 - Do NOT add new top-level per-episode sections beyond the required 7 components. Instead, weave RRK into the existing components (especially Nitty Gritty, Staff Pivot, Scenario Challenge, and L4 Trap).
-- Freshness / "latest & greatest" content must NOT be crammed into each core episode. It will be handled via dedicated Frontier Digest episodes (Episodes 13-15).
+- Freshness / "latest & greatest" content must NOT be crammed into each core episode. It will be handled via dedicated Frontier Digest episodes (Episodes {FRONTIER_RANGE}).
 
 =====================
 OUTPUT RULES BY MODE
@@ -34,21 +34,19 @@ You MUST follow the MODE exactly. Output ONLY what the mode asks for.
 MODE = SCAFFOLD
 - Output ONLY:
   1) "How to use this syllabus" (5-8 bullets)
-  2) "CISSP Coverage Map" table (includes Episodes 1-12 + Frontier Digests 13-15; and optional gap episodes only if later generated)
-  3) "Syllabus Index" table in LISTENING ORDER (includes Episodes 1-12 + Frontier Digests 13-15; gap episodes only if later generated)
+  2) "CISSP Coverage Map" table (includes Episodes 1-{TOTAL_CORE} + Frontier Digests {FRONTIER_RANGE}; and optional gap episodes only if later generated)
+  3) "Syllabus Index" table in LISTENING ORDER (includes Episodes 1-{TOTAL_CORE} + Frontier Digests {FRONTIER_RANGE}; gap episodes only if later generated)
 - Do NOT output any episode agendas in this mode.
 
 MODE = CORE_BATCH
-- Output ONLY the episode agendas for the specified CORE_EPISODES range (1-4 OR 5-8 OR 9-12).
+- Output ONLY the episode agendas for the specified CORE_EPISODES range.
 - Do NOT output How-to, CISSP map, Index, Frontier Digests, or any other episodes.
 
 MODE = FRONTIER_DIGEST
 - Output ONLY the single Frontier Digest agenda specified by FRONTIER_DIGEST (A or B or C).
 - Do NOT output How-to, CISSP map, Index, or any core episode agendas.
 - Use Episode numbering:
-  - Digest A = Episode 13 (covers core Episodes 1-4)
-  - Digest B = Episode 14 (covers core Episodes 5-8)
-  - Digest C = Episode 15 (covers core Episodes 9-12)
+{FRONTIER_MAP}
 
 MODE = FINAL_MERGE
 - Output ONLY:
@@ -71,7 +69,7 @@ OUTPUT PACKAGE (used in SCAFFOLD and FINAL_MERGE)
 
 3) Syllabus Index (table)
    Columns: Episode #, Title, Primary Focus, Primary CISSP domains (tags), Primary Interview Axis (Domain / RRK / Mixed), Key trade-off (<= 10 words)
-   Listening order: Episodes 1-4 -> Episode 13 (Frontier Digest A) -> Episodes 5-8 -> Episode 14 (Frontier Digest B) -> Episodes 9-12 -> Episode 15 (Frontier Digest C) -> (then any gap episodes 16-19)
+   Listening order: {LISTENING_ORDER}
 
 =====================
 EPISODE AGENDAS (used in CORE_BATCH, FRONTIER_DIGEST)

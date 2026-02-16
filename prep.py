@@ -115,6 +115,39 @@ def _reconfigure(core_count=12, frontier_count=3):
     ALL_EPS = CORE_EPS + FRONTIER_EPS
     SYLLABUS_RUNS = build_syllabus_runs(core_count, frontier_count)
 
+def _frontier_range_str():
+    """e.g. '13-15'"""
+    if not FRONTIER_EPS:
+        return "(none)"
+    return f"{FRONTIER_EPS[0]}-{FRONTIER_EPS[-1]}" if len(FRONTIER_EPS) > 1 else str(FRONTIER_EPS[0])
+
+def _frontier_map_str():
+    """e.g. '  - Digest A = Episode 13 (covers core Episodes 1-4)\n  ...'"""
+    fm = frontier_map()
+    lines = []
+    batch_size = 4
+    for letter, ep_num in sorted(fm.items(), key=lambda x: x[1]):
+        idx = ord(letter) - ord('A')
+        start = idx * batch_size + 1
+        end = min((idx + 1) * batch_size, _CORE_COUNT)
+        lines.append(f"  - Digest {letter} = Episode {ep_num} (covers core Episodes {start}-{end})")
+    return "\n".join(lines) if lines else "  (no frontier digests)"
+
+def _listening_order_str():
+    """e.g. 'Episodes 1-4 -> Episode 13 (Frontier Digest A) -> Episodes 5-8 -> ...'"""
+    fm = frontier_map()
+    parts = []
+    batch_size = 4
+    for i in range(0, _CORE_COUNT, batch_size):
+        start = i + 1
+        end = min(i + batch_size, _CORE_COUNT)
+        parts.append(f"Episodes {start}-{end}")
+        letter = chr(ord('A') + i // batch_size)
+        if letter in fm:
+            ep = fm[letter]
+            parts.append(f"Episode {ep} (Frontier Digest {letter})")
+    return " -> ".join(parts)
+
 # ---------------------------------------------------------------------------
 # OPENAI CLIENT
 # ---------------------------------------------------------------------------
@@ -237,12 +270,23 @@ def load_prompt(name):
 
 def syllabus_prompt(run):
     t = load_prompt("syllabus")
-    # Safe replacement - syllabus template has no user content with braces
-    return t.format(
-        MODE=run["mode"], CORE_EPISODES=run["core"],
-        FRONTIER_DIGEST=run["frontier"], AS_OF_OVERRIDE=AS_OF,
-        ROLE=ROLE, COMPANY=COMPANY, DOMAIN=DOMAIN, AUDIENCE=AUDIENCE,
-    )
+    # Run-specific vars
+    t = t.replace("{MODE}", run["mode"])
+    t = t.replace("{CORE_EPISODES}", run["core"])
+    t = t.replace("{FRONTIER_DIGEST}", run["frontier"])
+    t = t.replace("{AS_OF_OVERRIDE}", AS_OF)
+    # Role vars
+    t = t.replace("{ROLE}", ROLE)
+    t = t.replace("{COMPANY}", COMPANY)
+    t = t.replace("{DOMAIN}", DOMAIN)
+    t = t.replace("{AUDIENCE}", AUDIENCE)
+    # Count vars
+    t = t.replace("{TOTAL_CORE}", str(_CORE_COUNT))
+    t = t.replace("{CORE_RANGE}", f"1-{_CORE_COUNT}")
+    t = t.replace("{FRONTIER_RANGE}", _frontier_range_str())
+    t = t.replace("{FRONTIER_MAP}", _frontier_map_str())
+    t = t.replace("{LISTENING_ORDER}", _listening_order_str())
+    return t
 
 def content_prompt(agenda, notes=""):
     t = load_prompt("content")
