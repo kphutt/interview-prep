@@ -2203,6 +2203,16 @@ class TestCostEstimates(unittest.TestCase):
             result = prep._confirm_cost(8, yes=False)
         self.assertTrue(result)
 
+    @patch('prep.get_client')
+    @patch('prep._confirm_cost', return_value=False)
+    def test_main_calls_confirm_before_api(self, mock_confirm, mock_client):
+        """Cost confirmation declining should prevent any API command from running."""
+        mock_client.return_value = MagicMock()
+        with patch('sys.argv', ['prep.py', 'syllabus']):
+            prep.main()
+        mock_confirm.assert_called_once()
+        mock_client.return_value.responses.create.assert_not_called()
+
 
 class TestEnhancedStatus(_ProfileTestMixin, unittest.TestCase):
     """Step 6: Enhanced cmd_status with profile listing and pipeline view."""

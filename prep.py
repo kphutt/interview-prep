@@ -1065,6 +1065,19 @@ def main():
 
     client = get_client()
     force = args.force
+
+    # Cost confirmation before API calls
+    call_counts = {
+        "all": len(SYLLABUS_RUNS) + len(ALL_EPS),
+        "syllabus": len(SYLLABUS_RUNS),
+        "content": 1 if args.episode else len(ALL_EPS),
+        "add": 2,  # distill + content
+    }
+    num_calls = call_counts.get(args.command, 0)
+    if num_calls and not _confirm_cost(num_calls, yes=args.yes):
+        print("Cancelled.")
+        return
+
     if args.command == "all":      cmd_all(client, force)
     elif args.command == "syllabus": cmd_syllabus(client, force)
     elif args.command == "content":  cmd_content(client, force, episode=args.episode)
