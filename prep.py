@@ -233,7 +233,7 @@ def load_prompt(name):
     if not p.exists():
         print(f"ERROR: {p} not found")
         sys.exit(1)
-    return p.read_text()
+    return p.read_text(encoding="utf-8")
 
 def syllabus_prompt(run):
     t = load_prompt("syllabus")
@@ -334,26 +334,26 @@ def recover_agendas_from_raw():
     """If raw syllabus files exist but agenda files don't, re-parse them."""
     recovered = 0
     for raw_file in sorted(RAW_DIR.glob("syllabus-*-core_batch*.md")):
-        text = raw_file.read_text()
+        text = raw_file.read_text(encoding="utf-8")
         if not text.strip():
             continue
         parsed = parse_agendas(text)
         for ep, txt in parsed.items():
             p = SYLLABUS_DIR / ep_file(ep, "agenda")
             if not p.exists() and not (IN_AGENDAS / ep_file(ep, "agenda")).exists():
-                p.write_text(txt)
+                p.write_text(txt, encoding="utf-8")
                 print(f"  recovered {p.name} from {raw_file.name}")
                 recovered += 1
 
     for raw_file in sorted(RAW_DIR.glob("syllabus-*-frontier_digest*.md")):
-        text = raw_file.read_text()
+        text = raw_file.read_text(encoding="utf-8")
         if not text.strip():
             continue
         parsed = parse_agendas(text)
         for ep, txt in parsed.items():
             p = SYLLABUS_DIR / ep_file(ep, "agenda")
             if not p.exists() and not (IN_AGENDAS / ep_file(ep, "agenda")).exists():
-                p.write_text(txt)
+                p.write_text(txt, encoding="utf-8")
                 print(f"  recovered {p.name} from {raw_file.name}")
                 recovered += 1
 
@@ -383,14 +383,14 @@ def cmd_syllabus(client, force=False):
             p = SYLLABUS_DIR / "scaffold.md"
             if p.exists():
                 print(f"  skip {tag} - scaffold exists")
-                prior_outputs.append(p.read_text())
+                prior_outputs.append(p.read_text(encoding="utf-8"))
                 continue
 
         if not force and mode == "FINAL_MERGE":
             p = SYLLABUS_DIR / "final_merge.md"
             if p.exists():
                 print(f"  skip {tag} - final_merge exists")
-                prior_outputs.append(p.read_text())
+                prior_outputs.append(p.read_text(encoding="utf-8"))
                 continue
 
         if not force and mode == "CORE_BATCH":
@@ -399,14 +399,14 @@ def cmd_syllabus(client, force=False):
             if all(find_agenda(n) for n in range(s, e+1)):
                 print(f"  skip {tag} - agendas exist")
                 for n in range(s, e+1):
-                    prior_outputs.append(find_agenda(n).read_text())
+                    prior_outputs.append(find_agenda(n).read_text(encoding="utf-8"))
                 continue
 
         if not force and mode == "FRONTIER_DIGEST":
             ep = frontier_map()[run["frontier"]]
             if find_agenda(ep):
                 print(f"  skip {tag} - agenda exists")
-                prior_outputs.append(find_agenda(ep).read_text())
+                prior_outputs.append(find_agenda(ep).read_text(encoding="utf-8"))
                 continue
 
         # Build prompt with prior context embedded in input
@@ -422,7 +422,7 @@ def cmd_syllabus(client, force=False):
         if not resp:
             print(f"  FAIL {tag}"); return False
 
-        (RAW_DIR / f"syllabus-{num:02d}-{mode.lower()}.md").write_text(resp)
+        (RAW_DIR / f"syllabus-{num:02d}-{mode.lower()}.md").write_text(resp, encoding="utf-8")
         prior_outputs.append(resp)
 
         if mode in ("CORE_BATCH", "FRONTIER_DIGEST"):
@@ -433,12 +433,12 @@ def cmd_syllabus(client, force=False):
                 print(f"    Check format: expected '## Episode N:' or '## Frontier Digest A/B/C:'")
             for ep, txt in parsed.items():
                 p = SYLLABUS_DIR / ep_file(ep, "agenda")
-                p.write_text(txt)
+                p.write_text(txt, encoding="utf-8")
                 print(f"    saved {p.name}")
 
         if mode in ("SCAFFOLD", "FINAL_MERGE"):
             p = SYLLABUS_DIR / f"{mode.lower()}.md"
-            p.write_text(resp)
+            p.write_text(resp, encoding="utf-8")
             print(f"    saved {p.name}")
 
         print(f"  done {tag}")
@@ -455,7 +455,7 @@ def cmd_content(client, force=False):
     for ep in ALL_EPS:
         c = find_content(ep)
         if not force and c:
-            if len(c.read_text().strip()) < 500:
+            if len(c.read_text(encoding="utf-8").strip()) < 500:
                 print(f"  warn ep {ep:02d} - content file too small ({c}), regenerating")
             else:
                 print(f"  skip ep {ep:02d} - content exists")
@@ -465,7 +465,7 @@ def cmd_content(client, force=False):
         if not ag:
             print(f"  warn ep {ep:02d} - no agenda"); continue
 
-        agenda_text = ag.read_text().strip()
+        agenda_text = ag.read_text(encoding="utf-8").strip()
         if not agenda_text:
             print(f"  warn ep {ep:02d} - agenda file is empty ({ag})"); continue
 
@@ -475,8 +475,8 @@ def cmd_content(client, force=False):
             print(f"  FAIL ep {ep:02d}"); continue
 
         p = EPISODES_DIR / ep_file(ep, "content")
-        p.write_text(resp)
-        (RAW_DIR / ep_file(ep, "content-raw")).write_text(resp)
+        p.write_text(resp, encoding="utf-8")
+        (RAW_DIR / ep_file(ep, "content-raw")).write_text(resp, encoding="utf-8")
         print(f"  saved ep {ep:02d} ({len(resp):,} chars)")
         gen += 1
 
@@ -492,7 +492,7 @@ def cmd_package():
     search_range = ALL_EPS + list(range(len(ALL_EPS) + 1, len(ALL_EPS) + 15))
     for ep in search_range:
         c = find_content(ep)
-        if c: content[ep] = c.read_text()
+        if c: content[ep] = c.read_text(encoding="utf-8")
 
     # Also find misc content
     misc_files = sorted(EPISODES_DIR.glob("misc-*-content.md"))
@@ -502,9 +502,9 @@ def cmd_package():
 
     # NotebookLM: individual files
     for ep, txt in content.items():
-        (NLM_DIR / ep_file(ep, "content")).write_text(txt)
+        (NLM_DIR / ep_file(ep, "content")).write_text(txt, encoding="utf-8")
     for f in misc_files:
-        (NLM_DIR / f.name).write_text(f.read_text())
+        (NLM_DIR / f.name).write_text(f.read_text(encoding="utf-8"))
     print(f"  NotebookLM: {len(content) + len(misc_files)} files")
 
     # Gem: dynamic merged files
@@ -512,21 +512,21 @@ def cmd_package():
     for ep, txt in sorted(content.items()):
         buckets[gem_slot(ep)].append((f"EPISODE {ep}", txt))
     for f in misc_files:
-        buckets[total].append((f"MISC: {f.stem}", f.read_text()))
+        buckets[total].append((f"MISC: {f.stem}", f.read_text(encoding="utf-8")))
 
     for slot, items in buckets.items():
         if not items: continue
         merged = []
         for label, txt in items:
             merged.append(f"{'='*60}\n{label}\n{'='*60}\n\n{txt}")
-        (GEM_DIR / f"gem-{slot}.md").write_text("\n\n".join(merged))
+        (GEM_DIR / f"gem-{slot}.md").write_text("\n\n".join(merged), encoding="utf-8")
         names = [lbl for lbl, _ in items]
         print(f"  gem-{slot}.md: {', '.join(names)}")
 
     # Copy scaffold/merge for reference
     for n in ["scaffold.md", "final_merge.md"]:
         src = SYLLABUS_DIR / n
-        if src.exists(): (GEM_DIR / f"gem-0-{n}").write_text(src.read_text())
+        if src.exists(): (GEM_DIR / f"gem-0-{n}").write_text(src.read_text(encoding="utf-8"))
 
     print(f"\n=== PACKAGE COMPLETE ===")
     print(f"  NotebookLM -> {NLM_DIR}/")
@@ -540,26 +540,26 @@ def cmd_add(client, filepath, slot=None):
     if not src.exists():
         print(f"ERROR: {filepath} not found"); return False
 
-    raw = src.read_text()
+    raw = src.read_text(encoding="utf-8")
     name = re.sub(r'[^a-zA-Z0-9_-]', '_', src.stem)[:50]
 
     # Step 1: Distill
     print("  1. Distill -> Agenda")
     agenda = call_llm(client, DISTILL_INSTRUCTIONS, distill_prompt(raw), "Distill")
     if not agenda: return False
-    (SYLLABUS_DIR / f"misc-{name}-agenda.md").write_text(agenda)
+    (SYLLABUS_DIR / f"misc-{name}-agenda.md").write_text(agenda, encoding="utf-8")
 
     # Step 2: Content
     print("  2. Agenda -> Content")
     cont = call_llm(client, CONTENT_INSTRUCTIONS, content_prompt(agenda), "Content")
     if not cont: return False
-    (EPISODES_DIR / f"misc-{name}-content.md").write_text(cont)
-    (NLM_DIR / f"misc-{name}-content.md").write_text(cont)
+    (EPISODES_DIR / f"misc-{name}-content.md").write_text(cont, encoding="utf-8")
+    (NLM_DIR / f"misc-{name}-content.md").write_text(cont, encoding="utf-8")
 
     # Step 3: Append to gem
     gem_path = GEM_DIR / f"gem-{slot}.md"
     sep = f"\n\n{'='*60}\nMISC: {src.name}\n{'='*60}\n\n"
-    with open(gem_path, "a") as f:
+    with open(gem_path, "a", encoding="utf-8") as f:
         f.write(sep + cont)
     print(f"  Appended to gem-{slot}.md")
 
@@ -582,7 +582,7 @@ def cmd_status():
     print("\nGem files:")
     for i in range(1, _total_gem_slots() + 1):
         g = GEM_DIR / f"gem-{i}.md"
-        print(f"  gem-{i}.md: {'Y ' + f'{len(g.read_text()):,} chars' if g.exists() else 'X'}")
+        print(f"  gem-{i}.md: {'Y ' + f'{len(g.read_text(encoding="utf-8")):,} chars' if g.exists() else 'X'}")
 
     print(f"\nMisc: {len(list(EPISODES_DIR.glob('misc-*')))} episodes")
 
@@ -661,7 +661,7 @@ def write_manifest():
 
     manifest = "\n".join(lines)
     p = OUTPUTS / "manifest.txt"
-    p.write_text(manifest)
+    p.write_text(manifest, encoding="utf-8")
     print(f"\n{manifest}")
     print(f"\n  Manifest saved to {p}\n")
 
@@ -710,7 +710,7 @@ def main():
         if not p.exists():
             print(f"ERROR: {p} not found")
             sys.exit(1)
-        print(render_template(p.read_text()), end="")
+        print(render_template(p.read_text(encoding="utf-8")), end="")
         return
 
     client = get_client()

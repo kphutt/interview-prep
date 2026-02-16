@@ -226,35 +226,35 @@ class TestFileHelpers(unittest.TestCase):
 
     def test_find_agenda_in_inputs(self):
         p = prep.IN_AGENDAS / "episode-01-agenda.md"
-        p.write_text("agenda 1")
+        p.write_text("agenda 1", encoding="utf-8")
         self.assertEqual(prep.find_agenda(1), p)
 
     def test_find_agenda_in_outputs(self):
         p = prep.SYLLABUS_DIR / "episode-03-agenda.md"
-        p.write_text("agenda 3")
+        p.write_text("agenda 3", encoding="utf-8")
         self.assertEqual(prep.find_agenda(3), p)
 
     def test_find_agenda_inputs_priority(self):
         """inputs/ should be checked before outputs/"""
         p1 = prep.IN_AGENDAS / "episode-01-agenda.md"
         p2 = prep.SYLLABUS_DIR / "episode-01-agenda.md"
-        p1.write_text("from inputs")
-        p2.write_text("from outputs")
+        p1.write_text("from inputs", encoding="utf-8")
+        p2.write_text("from outputs", encoding="utf-8")
         result = prep.find_agenda(1)
         self.assertEqual(result, p1)
-        self.assertEqual(result.read_text(), "from inputs")
+        self.assertEqual(result.read_text(encoding="utf-8"), "from inputs")
 
     def test_find_agenda_missing(self):
         self.assertIsNone(prep.find_agenda(99))
 
     def test_find_content_in_inputs(self):
         p = prep.IN_EPISODES / "episode-02-content.md"
-        p.write_text("content 2")
+        p.write_text("content 2", encoding="utf-8")
         self.assertEqual(prep.find_content(2), p)
 
     def test_find_content_in_outputs(self):
         p = prep.EPISODES_DIR / "episode-05-content.md"
-        p.write_text("content 5")
+        p.write_text("content 5", encoding="utf-8")
         self.assertEqual(prep.find_content(5), p)
 
     def test_find_content_missing(self):
@@ -263,10 +263,10 @@ class TestFileHelpers(unittest.TestCase):
     def test_zero_byte_agenda_exists_but_empty(self):
         """A 0-byte file should still be 'found' — caller must handle."""
         p = prep.IN_AGENDAS / "episode-05-agenda.md"
-        p.write_text("")
+        p.write_text("", encoding="utf-8")
         result = prep.find_agenda(5)
         self.assertEqual(result, p)
-        self.assertEqual(result.read_text(), "")
+        self.assertEqual(result.read_text(encoding="utf-8"), "")
 
 
 class TestSkipLogic(unittest.TestCase):
@@ -290,8 +290,8 @@ class TestSkipLogic(unittest.TestCase):
     def test_content_skips_existing(self):
         """If content exists, cmd_content should not call LLM for that episode."""
         # Create agenda + content for ep 1
-        (prep.SYLLABUS_DIR / "episode-01-agenda.md").write_text("agenda")
-        (prep.EPISODES_DIR / "episode-01-content.md").write_text("x" * 1000)
+        (prep.SYLLABUS_DIR / "episode-01-agenda.md").write_text("agenda", encoding="utf-8")
+        (prep.EPISODES_DIR / "episode-01-content.md").write_text("x" * 1000, encoding="utf-8")
 
         client = MagicMock()
         # Run content for just ep 1 by temporarily limiting ALL_EPS
@@ -307,8 +307,8 @@ class TestSkipLogic(unittest.TestCase):
 
     def test_content_regenerates_truncated_file(self):
         """If content file is too small (<500 chars), regenerate it."""
-        (prep.SYLLABUS_DIR / "episode-01-agenda.md").write_text("Full agenda text " * 50)
-        (prep.EPISODES_DIR / "episode-01-content.md").write_text("truncated")  # <500 chars
+        (prep.SYLLABUS_DIR / "episode-01-agenda.md").write_text("Full agenda text " * 50, encoding="utf-8")
+        (prep.EPISODES_DIR / "episode-01-content.md").write_text("truncated", encoding="utf-8")  # <500 chars
 
         mock_resp = MagicMock()
         mock_resp.status = "completed"
@@ -330,8 +330,8 @@ class TestSkipLogic(unittest.TestCase):
 
     def test_content_regenerates_empty_file(self):
         """0-byte content file should be regenerated."""
-        (prep.SYLLABUS_DIR / "episode-01-agenda.md").write_text("Full agenda text " * 50)
-        (prep.EPISODES_DIR / "episode-01-content.md").write_text("")  # empty
+        (prep.SYLLABUS_DIR / "episode-01-agenda.md").write_text("Full agenda text " * 50, encoding="utf-8")
+        (prep.EPISODES_DIR / "episode-01-content.md").write_text("", encoding="utf-8")  # empty
 
         mock_resp = MagicMock()
         mock_resp.status = "completed"
@@ -352,8 +352,8 @@ class TestSkipLogic(unittest.TestCase):
 
     def test_content_force_regenerates(self):
         """With --force, existing content should be regenerated."""
-        (prep.SYLLABUS_DIR / "episode-01-agenda.md").write_text("agenda text " * 50)
-        (prep.EPISODES_DIR / "episode-01-content.md").write_text("old content " * 100)
+        (prep.SYLLABUS_DIR / "episode-01-agenda.md").write_text("agenda text " * 50, encoding="utf-8")
+        (prep.EPISODES_DIR / "episode-01-content.md").write_text("old content " * 100, encoding="utf-8")
 
         # Mock the LLM
         mock_resp = MagicMock()
@@ -372,12 +372,12 @@ class TestSkipLogic(unittest.TestCase):
             prep.ALL_EPS = orig_all
 
         client.responses.create.assert_called_once()
-        new_content = (prep.EPISODES_DIR / "episode-01-content.md").read_text()
+        new_content = (prep.EPISODES_DIR / "episode-01-content.md").read_text(encoding="utf-8")
         self.assertEqual(new_content, "new content generated")
 
     def test_scaffold_skip(self):
         """Scaffold should be skipped if scaffold.md exists."""
-        (prep.SYLLABUS_DIR / "scaffold.md").write_text("existing scaffold")
+        (prep.SYLLABUS_DIR / "scaffold.md").write_text("existing scaffold", encoding="utf-8")
 
         client = MagicMock()
         # Only run SCAFFOLD
@@ -393,7 +393,7 @@ class TestSkipLogic(unittest.TestCase):
     def test_core_batch_skip(self):
         """CORE_BATCH should be skipped if all agendas in range exist."""
         for n in range(1, 5):
-            (prep.SYLLABUS_DIR / f"episode-{n:02d}-agenda.md").write_text(f"agenda {n}")
+            (prep.SYLLABUS_DIR / f"episode-{n:02d}-agenda.md").write_text(f"agenda {n}", encoding="utf-8")
 
         client = MagicMock()
         orig_runs = prep.SYLLABUS_RUNS
@@ -407,7 +407,7 @@ class TestSkipLogic(unittest.TestCase):
 
     def test_core_batch_partial_runs(self):
         """CORE_BATCH should NOT skip if only some agendas exist."""
-        (prep.SYLLABUS_DIR / "episode-01-agenda.md").write_text("agenda 1")
+        (prep.SYLLABUS_DIR / "episode-01-agenda.md").write_text("agenda 1", encoding="utf-8")
         # 2, 3, 4 missing
 
         mock_resp = MagicMock()
@@ -446,51 +446,51 @@ class TestPackaging(unittest.TestCase):
 
     def test_package_creates_gem_files(self):
         # Create content for eps 1 and 2 (should go to gem-1)
-        (prep.EPISODES_DIR / "episode-01-content.md").write_text("Content for ep 1")
-        (prep.EPISODES_DIR / "episode-02-content.md").write_text("Content for ep 2")
+        (prep.EPISODES_DIR / "episode-01-content.md").write_text("Content for ep 1", encoding="utf-8")
+        (prep.EPISODES_DIR / "episode-02-content.md").write_text("Content for ep 2", encoding="utf-8")
 
         prep.cmd_package()
 
         gem1 = prep.GEM_DIR / "gem-1.md"
         self.assertTrue(gem1.exists())
-        text = gem1.read_text()
+        text = gem1.read_text(encoding="utf-8")
         self.assertIn("EPISODE 1", text)
         self.assertIn("EPISODE 2", text)
         self.assertIn("Content for ep 1", text)
         self.assertIn("Content for ep 2", text)
 
     def test_package_creates_notebooklm_files(self):
-        (prep.EPISODES_DIR / "episode-01-content.md").write_text("Content 1")
+        (prep.EPISODES_DIR / "episode-01-content.md").write_text("Content 1", encoding="utf-8")
 
         prep.cmd_package()
 
         nlm = prep.NLM_DIR / "episode-01-content.md"
         self.assertTrue(nlm.exists())
-        self.assertEqual(nlm.read_text(), "Content 1")
+        self.assertEqual(nlm.read_text(encoding="utf-8"), "Content 1")
 
     def test_package_misc_to_slot_8(self):
-        (prep.EPISODES_DIR / "misc-paper-content.md").write_text("Misc content")
+        (prep.EPISODES_DIR / "misc-paper-content.md").write_text("Misc content", encoding="utf-8")
 
         prep.cmd_package()
 
         gem8 = prep.GEM_DIR / "gem-8.md"
         self.assertTrue(gem8.exists())
-        self.assertIn("Misc content", gem8.read_text())
+        self.assertIn("Misc content", gem8.read_text(encoding="utf-8"))
 
     def test_package_no_content_returns_false(self):
         result = prep.cmd_package()
         self.assertFalse(result)
 
     def test_frontiers_to_slot_7(self):
-        (prep.EPISODES_DIR / "episode-13-content.md").write_text("Frontier A")
-        (prep.EPISODES_DIR / "episode-14-content.md").write_text("Frontier B")
+        (prep.EPISODES_DIR / "episode-13-content.md").write_text("Frontier A", encoding="utf-8")
+        (prep.EPISODES_DIR / "episode-14-content.md").write_text("Frontier B", encoding="utf-8")
 
         prep.cmd_package()
 
         gem7 = prep.GEM_DIR / "gem-7.md"
         self.assertTrue(gem7.exists())
-        self.assertIn("Frontier A", gem7.read_text())
-        self.assertIn("Frontier B", gem7.read_text())
+        self.assertIn("Frontier A", gem7.read_text(encoding="utf-8"))
+        self.assertIn("Frontier B", gem7.read_text(encoding="utf-8"))
 
 
 class TestCallLLM(unittest.TestCase):
@@ -774,7 +774,7 @@ Content for ep 1.
 **Episode 2 — The Session Kill Switch**
 Content for ep 2.
 """
-        (prep.RAW_DIR / "syllabus-02-core_batch.md").write_text(raw_text)
+        (prep.RAW_DIR / "syllabus-02-core_batch.md").write_text(raw_text, encoding="utf-8")
 
         count = prep.recover_agendas_from_raw()
         self.assertEqual(count, 2)
@@ -784,35 +784,35 @@ Content for ep 2.
     def test_no_double_recovery(self):
         """If agenda already exists, don't overwrite."""
         raw_text = "**Episode 1 — New Version**\nNew content."
-        (prep.RAW_DIR / "syllabus-02-core_batch.md").write_text(raw_text)
-        (prep.SYLLABUS_DIR / "episode-01-agenda.md").write_text("Original content")
+        (prep.RAW_DIR / "syllabus-02-core_batch.md").write_text(raw_text, encoding="utf-8")
+        (prep.SYLLABUS_DIR / "episode-01-agenda.md").write_text("Original content", encoding="utf-8")
 
         count = prep.recover_agendas_from_raw()
         self.assertEqual(count, 0)
         self.assertEqual(
-            (prep.SYLLABUS_DIR / "episode-01-agenda.md").read_text(),
+            (prep.SYLLABUS_DIR / "episode-01-agenda.md").read_text(encoding="utf-8"),
             "Original content"
         )
 
     def test_respects_inputs_priority(self):
         """If agenda exists in inputs/, don't recover from raw."""
         raw_text = "**Episode 1 — From Raw**\nRaw content."
-        (prep.RAW_DIR / "syllabus-02-core_batch.md").write_text(raw_text)
-        (prep.IN_AGENDAS / "episode-01-agenda.md").write_text("From inputs")
+        (prep.RAW_DIR / "syllabus-02-core_batch.md").write_text(raw_text, encoding="utf-8")
+        (prep.IN_AGENDAS / "episode-01-agenda.md").write_text("From inputs", encoding="utf-8")
 
         count = prep.recover_agendas_from_raw()
         self.assertEqual(count, 0)
 
     def test_recovers_frontier_digest(self):
         raw_text = "**Frontier Digest A — Updates**\nFrontier content."
-        (prep.RAW_DIR / "syllabus-03-frontier_digest.md").write_text(raw_text)
+        (prep.RAW_DIR / "syllabus-03-frontier_digest.md").write_text(raw_text, encoding="utf-8")
 
         count = prep.recover_agendas_from_raw()
         self.assertEqual(count, 1)
         self.assertTrue((prep.SYLLABUS_DIR / "episode-13-agenda.md").exists())
 
     def test_skips_empty_raw_file(self):
-        (prep.RAW_DIR / "syllabus-02-core_batch.md").write_text("")
+        (prep.RAW_DIR / "syllabus-02-core_batch.md").write_text("", encoding="utf-8")
         count = prep.recover_agendas_from_raw()
         self.assertEqual(count, 0)
 
@@ -822,15 +822,15 @@ Content for ep 2.
     )
     def test_recovers_from_real_raw_file(self):
         """Recovery works with actual GPT-5.2-pro output."""
-        real_text = (Path(__file__).parent / "outputs" / "raw" / "syllabus-02-core_batch.md").read_text()
-        (prep.RAW_DIR / "syllabus-02-core_batch.md").write_text(real_text)
+        real_text = (Path(__file__).parent / "outputs" / "raw" / "syllabus-02-core_batch.md").read_text(encoding="utf-8")
+        (prep.RAW_DIR / "syllabus-02-core_batch.md").write_text(real_text, encoding="utf-8")
 
         count = prep.recover_agendas_from_raw()
         self.assertEqual(count, 4)
         for ep in [1, 2, 3, 4]:
             p = prep.SYLLABUS_DIR / f"episode-{ep:02d}-agenda.md"
             self.assertTrue(p.exists(), f"Missing {p.name}")
-            self.assertGreater(len(p.read_text()), 1000)
+            self.assertGreater(len(p.read_text(encoding="utf-8")), 1000)
 
 
 class TestSyllabusRuns(unittest.TestCase):
@@ -879,7 +879,7 @@ class TestReplayRealOutput(unittest.TestCase):
         "Real output file not available (run pipeline first)"
     )
     def test_parse_real_core_batch_1_4(self):
-        text = self.REAL_FILE.read_text()
+        text = self.REAL_FILE.read_text(encoding="utf-8")
         result = prep.parse_agendas(text)
 
         # Must find exactly episodes 1-4
@@ -904,7 +904,7 @@ class TestReplayRealOutput(unittest.TestCase):
     )
     def test_no_cross_contamination(self):
         """Episode 1 content should NOT contain Episode 2's title."""
-        text = self.REAL_FILE.read_text()
+        text = self.REAL_FILE.read_text(encoding="utf-8")
         result = prep.parse_agendas(text)
 
         self.assertNotIn("Session Kill Switch", result[1])
@@ -938,7 +938,7 @@ class TestRecoveryCalledByAllCommands(unittest.TestCase):
         (prep.RAW_DIR / "syllabus-02-core_batch.md").write_text(
             "**Episode 1 — Title**\nContent 1\n\n"
             "**Episode 2 — Title**\nContent 2\n"
-        )
+        , encoding="utf-8")
 
     def test_status_triggers_recovery(self):
         self._seed_raw()
@@ -957,8 +957,8 @@ class TestRecoveryCalledByAllCommands(unittest.TestCase):
         self.assertFalse((prep.SYLLABUS_DIR / "episode-01-agenda.md").exists())
 
         # Also need scaffold + final_merge so syllabus skips everything
-        (prep.SYLLABUS_DIR / "scaffold.md").write_text("scaffold")
-        (prep.SYLLABUS_DIR / "final_merge.md").write_text("merge")
+        (prep.SYLLABUS_DIR / "scaffold.md").write_text("scaffold", encoding="utf-8")
+        (prep.SYLLABUS_DIR / "final_merge.md").write_text("merge", encoding="utf-8")
 
         client = MagicMock()
         orig_runs = prep.SYLLABUS_RUNS
@@ -1028,8 +1028,8 @@ class TestEndToEndResume(unittest.TestCase):
     def _seed_overnight_state(self):
         """Simulate what the old code leaves behind: raw files + scaffold + final_merge.
         Zero agenda files, zero content files."""
-        (prep.SYLLABUS_DIR / "scaffold.md").write_text("SCAFFOLD content")
-        (prep.SYLLABUS_DIR / "final_merge.md").write_text("FINAL_MERGE content")
+        (prep.SYLLABUS_DIR / "scaffold.md").write_text("SCAFFOLD content", encoding="utf-8")
+        (prep.SYLLABUS_DIR / "final_merge.md").write_text("FINAL_MERGE content", encoding="utf-8")
 
         for batch, eps in [("02", "1-4"), ("04", "5-8"), ("06", "9-12")]:
             s, e = map(int, eps.split("-"))
@@ -1037,14 +1037,14 @@ class TestEndToEndResume(unittest.TestCase):
                 f"**Episode {n} — Title {n}**\nHook for ep {n}.\nNitty gritty for ep {n}."
                 for n in range(s, e + 1)
             )
-            (prep.RAW_DIR / f"syllabus-{batch}-core_batch.md").write_text(text)
+            (prep.RAW_DIR / f"syllabus-{batch}-core_batch.md").write_text(text, encoding="utf-8")
 
         for num, letter in [("03", "A"), ("05", "B"), ("07", "C")]:
             text = f"**Frontier Digest {letter} — Updates**\nFrontier content for {letter}."
-            (prep.RAW_DIR / f"syllabus-{num}-frontier_digest.md").write_text(text)
+            (prep.RAW_DIR / f"syllabus-{num}-frontier_digest.md").write_text(text, encoding="utf-8")
 
-        (prep.RAW_DIR / "syllabus-01-scaffold.md").write_text("SCAFFOLD raw")
-        (prep.RAW_DIR / "syllabus-08-final_merge.md").write_text("FINAL_MERGE raw")
+        (prep.RAW_DIR / "syllabus-01-scaffold.md").write_text("SCAFFOLD raw", encoding="utf-8")
+        (prep.RAW_DIR / "syllabus-08-final_merge.md").write_text("FINAL_MERGE raw", encoding="utf-8")
 
     def test_full_resume_flow(self):
         """The money test: overnight state -> recovery -> skip -> content -> package."""
@@ -1109,7 +1109,7 @@ class TestEndToEndResume(unittest.TestCase):
         for ep in [1, 2, 3]:
             (prep.EPISODES_DIR / prep.ep_file(ep, "content")).write_text(
                 "Previously generated content " * 100
-            )
+            , encoding="utf-8")
 
         mock_resp = MagicMock()
         mock_resp.status = "completed"
@@ -1225,7 +1225,7 @@ class TestCmdAdd(unittest.TestCase):
 
     def test_add_creates_agenda_and_content(self):
         src = Path(self.tmpdir) / "test-paper.md"
-        src.write_text("This is a test paper about mTLS.")
+        src.write_text("This is a test paper about mTLS.", encoding="utf-8")
 
         mock_agenda = MagicMock(status="completed", output_text="## Agenda\nTest agenda", usage=None)
         mock_content = MagicMock(status="completed", output_text="## Content\nTest content " * 50, usage=None)
@@ -1240,7 +1240,7 @@ class TestCmdAdd(unittest.TestCase):
         self.assertTrue((prep.EPISODES_DIR / "misc-test-paper-content.md").exists())
         self.assertTrue((prep.NLM_DIR / "misc-test-paper-content.md").exists())
         self.assertTrue((prep.GEM_DIR / "gem-8.md").exists())
-        self.assertIn("Test content", (prep.GEM_DIR / "gem-8.md").read_text())
+        self.assertIn("Test content", (prep.GEM_DIR / "gem-8.md").read_text(encoding="utf-8"))
 
     def test_add_nonexistent_file(self):
         client = MagicMock()
@@ -1250,7 +1250,7 @@ class TestCmdAdd(unittest.TestCase):
 
     def test_add_distill_failure(self):
         src = Path(self.tmpdir) / "test.md"
-        src.write_text("content")
+        src.write_text("content", encoding="utf-8")
 
         client = MagicMock()
         client.responses.create.return_value = MagicMock(
@@ -1266,7 +1266,7 @@ class TestCmdAdd(unittest.TestCase):
 
     def test_add_custom_gem_slot(self):
         src = Path(self.tmpdir) / "paper.md"
-        src.write_text("content")
+        src.write_text("content", encoding="utf-8")
 
         client = MagicMock()
         client.responses.create.side_effect = [
@@ -1295,24 +1295,24 @@ class TestWriteManifest(unittest.TestCase):
             setattr(prep, attr, val)
 
     def test_manifest_created(self):
-        (prep.SYLLABUS_DIR / "episode-01-agenda.md").write_text("agenda")
-        (prep.EPISODES_DIR / "episode-01-content.md").write_text("content " * 500)
+        (prep.SYLLABUS_DIR / "episode-01-agenda.md").write_text("agenda", encoding="utf-8")
+        (prep.EPISODES_DIR / "episode-01-content.md").write_text("content " * 500, encoding="utf-8")
         prep.write_manifest()
         manifest = prep.OUTPUTS / "manifest.txt"
         self.assertTrue(manifest.exists())
-        text = manifest.read_text()
+        text = manifest.read_text(encoding="utf-8")
         self.assertIn("MANIFEST", text)
         self.assertIn("ep 01:", text)
 
     def test_manifest_warns_on_missing(self):
         prep.write_manifest()
-        text = (prep.OUTPUTS / "manifest.txt").read_text()
+        text = (prep.OUTPUTS / "manifest.txt").read_text(encoding="utf-8")
         self.assertIn("MISSING", text)
 
     def test_manifest_warns_on_small_content(self):
-        (prep.EPISODES_DIR / "episode-01-content.md").write_text("tiny")
+        (prep.EPISODES_DIR / "episode-01-content.md").write_text("tiny", encoding="utf-8")
         prep.write_manifest()
-        text = (prep.OUTPUTS / "manifest.txt").read_text()
+        text = (prep.OUTPUTS / "manifest.txt").read_text(encoding="utf-8")
         self.assertIn("suspiciously small", text)
 
 
@@ -1349,7 +1349,7 @@ class TestContentEdgeCases(unittest.TestCase):
 
     def test_content_warns_on_empty_agenda(self):
         """Episode with empty agenda should warn, not crash."""
-        (prep.SYLLABUS_DIR / "episode-01-agenda.md").write_text("")
+        (prep.SYLLABUS_DIR / "episode-01-agenda.md").write_text("", encoding="utf-8")
         client = MagicMock()
         orig_all = prep.ALL_EPS
         prep.ALL_EPS = [1]
@@ -1365,7 +1365,7 @@ class TestContentEdgeCases(unittest.TestCase):
 
     def test_frontier_digest_skip(self):
         """FRONTIER_DIGEST should be skipped if agenda exists."""
-        (prep.SYLLABUS_DIR / "episode-13-agenda.md").write_text("frontier A agenda")
+        (prep.SYLLABUS_DIR / "episode-13-agenda.md").write_text("frontier A agenda", encoding="utf-8")
         client = MagicMock()
         orig_runs = prep.SYLLABUS_RUNS
         prep.SYLLABUS_RUNS = [dict(mode="FRONTIER_DIGEST", core="", frontier="A")]
@@ -1568,20 +1568,20 @@ class TestPackageGemScaffold(unittest.TestCase):
             setattr(prep, attr, val)
 
     def test_scaffold_copied_to_gem0(self):
-        (prep.SYLLABUS_DIR / "scaffold.md").write_text("scaffold content here")
-        (prep.EPISODES_DIR / "episode-01-content.md").write_text("ep1 content")
+        (prep.SYLLABUS_DIR / "scaffold.md").write_text("scaffold content here", encoding="utf-8")
+        (prep.EPISODES_DIR / "episode-01-content.md").write_text("ep1 content", encoding="utf-8")
         prep.cmd_package()
         gem0 = prep.GEM_DIR / "gem-0-scaffold.md"
         self.assertTrue(gem0.exists())
-        self.assertEqual(gem0.read_text(), "scaffold content here")
+        self.assertEqual(gem0.read_text(encoding="utf-8"), "scaffold content here")
 
     def test_final_merge_copied_to_gem0(self):
-        (prep.SYLLABUS_DIR / "final_merge.md").write_text("merge content here")
-        (prep.EPISODES_DIR / "episode-01-content.md").write_text("ep1 content")
+        (prep.SYLLABUS_DIR / "final_merge.md").write_text("merge content here", encoding="utf-8")
+        (prep.EPISODES_DIR / "episode-01-content.md").write_text("ep1 content", encoding="utf-8")
         prep.cmd_package()
         gem0 = prep.GEM_DIR / "gem-0-final_merge.md"
         self.assertTrue(gem0.exists())
-        self.assertEqual(gem0.read_text(), "merge content here")
+        self.assertEqual(gem0.read_text(encoding="utf-8"), "merge content here")
 
 
 class TestScaffoldPromptListeningOrder(unittest.TestCase):
@@ -1738,19 +1738,19 @@ class TestDynamicManifest(unittest.TestCase):
     def test_uses_dynamic_total(self):
         prep._reconfigure(8, 2)
         prep.write_manifest()
-        text = (prep.OUTPUTS / "manifest.txt").read_text()
+        text = (prep.OUTPUTS / "manifest.txt").read_text(encoding="utf-8")
         self.assertIn("0/10", text)
         self.assertNotIn("/15", text)
 
     def test_all_present_dynamic(self):
         prep._reconfigure(4, 1)
         for ep in prep.ALL_EPS:
-            (prep.SYLLABUS_DIR / prep.ep_file(ep, "agenda")).write_text("agenda " * 100)
-            (prep.EPISODES_DIR / prep.ep_file(ep, "content")).write_text("content " * 500)
+            (prep.SYLLABUS_DIR / prep.ep_file(ep, "agenda")).write_text("agenda " * 100, encoding="utf-8")
+            (prep.EPISODES_DIR / prep.ep_file(ep, "content")).write_text("content " * 500, encoding="utf-8")
         prep.write_manifest()
-        text = (prep.OUTPUTS / "manifest.txt").read_text()
+        text = (prep.OUTPUTS / "manifest.txt").read_text(encoding="utf-8")
         self.assertIn("all 5 episodes", text)
-        self.assertNotIn("15", text)
+        self.assertNotIn("/15", text)
 
     def test_header_shows_dynamic_run_count(self):
         prep._reconfigure(8, 2)
@@ -1763,10 +1763,10 @@ class TestDynamicManifest(unittest.TestCase):
             import io
             from contextlib import redirect_stdout
             # Create all needed files so all runs are skipped
-            (prep.SYLLABUS_DIR / "scaffold.md").write_text("scaffold")
-            (prep.SYLLABUS_DIR / "final_merge.md").write_text("merge")
+            (prep.SYLLABUS_DIR / "scaffold.md").write_text("scaffold", encoding="utf-8")
+            (prep.SYLLABUS_DIR / "final_merge.md").write_text("merge", encoding="utf-8")
             for ep in prep.ALL_EPS:
-                (prep.SYLLABUS_DIR / prep.ep_file(ep, "agenda")).write_text("agenda")
+                (prep.SYLLABUS_DIR / prep.ep_file(ep, "agenda")).write_text("agenda", encoding="utf-8")
             client = MagicMock()
             with redirect_stdout(io.StringIO()) as f:
                 prep.cmd_syllabus(client, force=False)
@@ -1800,7 +1800,7 @@ class TestDynamicPackaging(unittest.TestCase):
         try:
             # Create content for all 10 episodes
             for ep in prep.ALL_EPS:
-                (prep.EPISODES_DIR / prep.ep_file(ep, "content")).write_text(f"Content for ep {ep}")
+                (prep.EPISODES_DIR / prep.ep_file(ep, "content")).write_text(f"Content for ep {ep}", encoding="utf-8")
             prep.cmd_package()
             # Core slots 1-4, frontier slot 5
             for slot in range(1, 5):
@@ -1823,11 +1823,11 @@ class TestDynamicPackaging(unittest.TestCase):
             setattr(prep, attr, new_dir)
         prep._reconfigure(8, 2)
         try:
-            (prep.EPISODES_DIR / "misc-paper-content.md").write_text("Misc content")
+            (prep.EPISODES_DIR / "misc-paper-content.md").write_text("Misc content", encoding="utf-8")
             prep.cmd_package()
             # With 8 core + 2 frontier: misc goes to slot 6
             self.assertTrue((prep.GEM_DIR / "gem-6.md").exists(), "gem-6.md (misc) missing")
-            self.assertIn("Misc content", (prep.GEM_DIR / "gem-6.md").read_text())
+            self.assertIn("Misc content", (prep.GEM_DIR / "gem-6.md").read_text(encoding="utf-8"))
         finally:
             prep._reconfigure()
             shutil.rmtree(tmpdir)
