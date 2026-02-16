@@ -12,8 +12,8 @@ Cross-references: [brainstorm.md](brainstorm.md) | [decisions.md](decisions.md) 
 |-------|-------------|--------|
 | 0 | Lock down current behavior (tests) | Done |
 | 1 | Dynamic episode counts | Done |
-| 2 | Template unification + syllabus adaptation | Not started |
-| 3 | Profile directory + config | Not started |
+| 2 | Template unification + syllabus adaptation | Done |
+| 3 | Profile directory + config | Done |
 | 4 | Domain-agnostic prompts | Not started |
 | 5 | Intake + meta-prompt | Not started |
 

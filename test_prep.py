@@ -817,12 +817,12 @@ Content for ep 2.
         self.assertEqual(count, 0)
 
     @unittest.skipUnless(
-        (Path(__file__).parent / "outputs" / "raw" / "syllabus-02-core_batch.md").exists(),
+        (Path(__file__).parent / "profiles" / "security-infra" / "outputs" / "raw" / "syllabus-02-core_batch.md").exists(),
         "Real output file not available (run pipeline first)"
     )
     def test_recovers_from_real_raw_file(self):
         """Recovery works with actual GPT-5.2-pro output."""
-        real_text = (Path(__file__).parent / "outputs" / "raw" / "syllabus-02-core_batch.md").read_text(encoding="utf-8")
+        real_text = (Path(__file__).parent / "profiles" / "security-infra" / "outputs" / "raw" / "syllabus-02-core_batch.md").read_text(encoding="utf-8")
         (prep.RAW_DIR / "syllabus-02-core_batch.md").write_text(real_text, encoding="utf-8")
 
         count = prep.recover_agendas_from_raw()
@@ -872,10 +872,10 @@ class TestConstants(unittest.TestCase):
 class TestReplayRealOutput(unittest.TestCase):
     """Replay test using actual GPT-5.2-pro output."""
 
-    REAL_FILE = Path(__file__).parent / "outputs" / "raw" / "syllabus-02-core_batch.md"
+    REAL_FILE = Path(__file__).parent / "profiles" / "security-infra" / "outputs" / "raw" / "syllabus-02-core_batch.md"
 
     @unittest.skipUnless(
-        (Path(__file__).parent / "outputs" / "raw" / "syllabus-02-core_batch.md").exists(),
+        (Path(__file__).parent / "profiles" / "security-infra" / "outputs" / "raw" / "syllabus-02-core_batch.md").exists(),
         "Real output file not available (run pipeline first)"
     )
     def test_parse_real_core_batch_1_4(self):
@@ -899,7 +899,7 @@ class TestReplayRealOutput(unittest.TestCase):
                     f"Episode {ep} missing section: {section}")
 
     @unittest.skipUnless(
-        (Path(__file__).parent / "outputs" / "raw" / "syllabus-02-core_batch.md").exists(),
+        (Path(__file__).parent / "profiles" / "security-infra" / "outputs" / "raw" / "syllabus-02-core_batch.md").exists(),
         "Real output file not available (run pipeline first)"
     )
     def test_no_cross_contamination(self):
@@ -1398,28 +1398,50 @@ class TestRoleConfig(unittest.TestCase):
 
 class TestSystemInstructions(unittest.TestCase):
     def test_syllabus_instructions_use_role(self):
-        self.assertIn(prep.ROLE, prep.SYLLABUS_INSTRUCTIONS)
+        self.assertIn(prep.ROLE, prep._syllabus_instructions())
 
     def test_syllabus_instructions_use_company(self):
-        self.assertIn(prep.COMPANY, prep.SYLLABUS_INSTRUCTIONS)
+        self.assertIn(prep.COMPANY, prep._syllabus_instructions())
 
     def test_content_instructions_use_role(self):
-        self.assertIn(prep.ROLE, prep.CONTENT_INSTRUCTIONS)
+        self.assertIn(prep.ROLE, prep._content_instructions())
 
     def test_content_instructions_use_company(self):
-        self.assertIn(prep.COMPANY, prep.CONTENT_INSTRUCTIONS)
+        self.assertIn(prep.COMPANY, prep._content_instructions())
 
     def test_distill_instructions_use_role(self):
-        self.assertIn(prep.ROLE, prep.DISTILL_INSTRUCTIONS)
+        self.assertIn(prep.ROLE, prep._distill_instructions())
 
     def test_distill_instructions_use_company(self):
-        self.assertIn(prep.COMPANY, prep.DISTILL_INSTRUCTIONS)
+        self.assertIn(prep.COMPANY, prep._distill_instructions())
 
     def test_no_hardcoded_google_in_instructions(self):
-        for instr in [prep.SYLLABUS_INSTRUCTIONS,
-                      prep.CONTENT_INSTRUCTIONS,
-                      prep.DISTILL_INSTRUCTIONS]:
+        for instr in [prep._syllabus_instructions(),
+                      prep._content_instructions(),
+                      prep._distill_instructions()]:
             self.assertNotIn("Staff Security Engineer (L6)", instr)
+
+    def test_instructions_reflect_updated_role(self):
+        """After changing ROLE, instructions should use new value."""
+        orig = prep.ROLE
+        prep.ROLE = "Principal Engineer"
+        try:
+            self.assertIn("Principal Engineer", prep._syllabus_instructions())
+            self.assertIn("Principal Engineer", prep._content_instructions())
+            self.assertIn("Principal Engineer", prep._distill_instructions())
+        finally:
+            prep.ROLE = orig
+
+    def test_instructions_reflect_updated_company(self):
+        """After changing COMPANY, instructions should use new value."""
+        orig = prep.COMPANY
+        prep.COMPANY = "Acme Corp"
+        try:
+            self.assertIn("Acme Corp", prep._syllabus_instructions())
+            self.assertIn("Acme Corp", prep._content_instructions())
+            self.assertIn("Acme Corp", prep._distill_instructions())
+        finally:
+            prep.COMPANY = orig
 
 
 class TestParameterizedPrompts(unittest.TestCase):
@@ -1994,6 +2016,669 @@ class TestCountHelpers(unittest.TestCase):
     def test_frontier_range_str_single(self):
         prep._reconfigure(4, 1)
         self.assertEqual(prep._frontier_range_str(), "5")
+
+
+class _ProfileTestMixin:
+    """Mixin that saves/restores all 13 dir constants + 7 config vars + episode counts."""
+
+    _PROFILE_DIR_ATTRS = [
+        'OUTPUTS', 'SYLLABUS_DIR', 'EPISODES_DIR', 'GEM_DIR', 'NLM_DIR',
+        'RAW_DIR', 'IN_AGENDAS', 'IN_EPISODES', 'IN_MISC',
+    ]
+    _PROFILE_CFG_ATTRS = [
+        'ROLE', 'COMPANY', 'DOMAIN', 'AUDIENCE', 'MODEL', 'EFFORT', 'AS_OF',
+    ]
+    _PROFILE_COUNT_ATTRS = [
+        '_CORE_COUNT', '_FRONTIER_COUNT', 'CORE_EPS', 'FRONTIER_EPS',
+        'ALL_EPS', 'SYLLABUS_RUNS',
+    ]
+
+    def _save_profile_state(self):
+        self._profile_saved = {}
+        for attr in self._PROFILE_DIR_ATTRS + self._PROFILE_CFG_ATTRS + self._PROFILE_COUNT_ATTRS:
+            self._profile_saved[attr] = getattr(prep, attr)
+
+    def _restore_profile_state(self):
+        for attr, val in self._profile_saved.items():
+            setattr(prep, attr, val)
+
+    def _write_profile(self, name, content, base=None):
+        base = base or self.tmpdir
+        d = Path(base) / "profiles" / name
+        d.mkdir(parents=True, exist_ok=True)
+        (d / "profile.md").write_text(content, encoding="utf-8")
+
+
+class TestLoadProfile(unittest.TestCase):
+    """Step 1: load_profile() YAML frontmatter parser."""
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self._orig_base = prep.BASE_DIR
+        prep.BASE_DIR = Path(self.tmpdir)
+
+    def tearDown(self):
+        prep.BASE_DIR = self._orig_base
+        shutil.rmtree(self.tmpdir)
+
+    def _write_profile(self, name, content):
+        d = Path(self.tmpdir) / "profiles" / name
+        d.mkdir(parents=True, exist_ok=True)
+        (d / "profile.md").write_text(content, encoding="utf-8")
+
+    def test_basic_parsing(self):
+        self._write_profile("test", "---\nrole: Staff SWE\ncompany: Meta\ndomain: Backend\n---\n")
+        cfg = prep.load_profile("test")
+        self.assertEqual(cfg["role"], "Staff SWE")
+        self.assertEqual(cfg["company"], "Meta")
+        self.assertEqual(cfg["domain"], "Backend")
+
+    def test_quoted_values(self):
+        self._write_profile("test", '---\nrole: "Staff Security Engineer"\ncompany: \'Google\'\ndomain: Security\n---\n')
+        cfg = prep.load_profile("test")
+        self.assertEqual(cfg["role"], "Staff Security Engineer")
+        self.assertEqual(cfg["company"], "Google")
+
+    def test_case_insensitive_keys(self):
+        self._write_profile("test", "---\nRole: Engineer\nCOMPANY: Acme\nDomain: ML\n---\n")
+        cfg = prep.load_profile("test")
+        self.assertEqual(cfg["role"], "Engineer")
+        self.assertEqual(cfg["company"], "Acme")
+        self.assertEqual(cfg["domain"], "ML")
+
+    def test_integer_fields_parsed(self):
+        self._write_profile("test", "---\nrole: SWE\ncompany: Co\ndomain: D\ncore_episodes: 8\nfrontier_episodes: 2\n---\n")
+        cfg = prep.load_profile("test")
+        self.assertEqual(cfg["core_episodes"], 8)
+        self.assertEqual(cfg["frontier_episodes"], 2)
+
+    def test_integer_validation_rejects_non_int(self):
+        self._write_profile("test", "---\nrole: SWE\ncompany: Co\ndomain: D\ncore_episodes: twelve\n---\n")
+        with self.assertRaises(SystemExit):
+            prep.load_profile("test")
+
+    def test_integer_validation_rejects_zero(self):
+        self._write_profile("test", "---\nrole: SWE\ncompany: Co\ndomain: D\ncore_episodes: 0\n---\n")
+        with self.assertRaises(SystemExit):
+            prep.load_profile("test")
+
+    def test_integer_validation_rejects_negative(self):
+        self._write_profile("test", "---\nrole: SWE\ncompany: Co\ndomain: D\nfrontier_episodes: -1\n---\n")
+        with self.assertRaises(SystemExit):
+            prep.load_profile("test")
+
+    def test_required_field_missing(self):
+        self._write_profile("test", "---\nrole: SWE\ncompany: Co\n---\n")  # missing domain
+        with self.assertRaises(SystemExit):
+            prep.load_profile("test")
+
+    def test_missing_dir(self):
+        with self.assertRaises(SystemExit):
+            prep.load_profile("nonexistent")
+
+    def test_missing_profile_md(self):
+        d = Path(self.tmpdir) / "profiles" / "empty"
+        d.mkdir(parents=True)
+        with self.assertRaises(SystemExit):
+            prep.load_profile("empty")
+
+    def test_unknown_key_warns(self):
+        self._write_profile("test", "---\nrole: SWE\ncompany: Co\ndomain: D\nroll: typo\n---\n")
+        import io
+        from contextlib import redirect_stdout
+        with redirect_stdout(io.StringIO()) as f:
+            prep.load_profile("test")
+        self.assertIn("WARNING", f.getvalue())
+        self.assertIn("roll", f.getvalue())
+
+    def test_blank_lines_and_comments_skipped(self):
+        content = "---\nrole: SWE\n# comment\n\ncompany: Co\ndomain: D\n---\n"
+        self._write_profile("test", content)
+        cfg = prep.load_profile("test")
+        self.assertEqual(cfg["role"], "SWE")
+        self.assertEqual(cfg["company"], "Co")
+
+    def test_optional_fields_not_required(self):
+        self._write_profile("test", "---\nrole: SWE\ncompany: Co\ndomain: D\n---\n")
+        cfg = prep.load_profile("test")
+        self.assertNotIn("audience", cfg)
+        self.assertNotIn("core_episodes", cfg)
+
+    def test_all_known_fields(self):
+        content = (
+            "---\n"
+            "role: SWE\ncompany: Co\ndomain: D\naudience: Engineers\n"
+            "core_episodes: 10\nfrontier_episodes: 2\nmodel: gpt-4o\n"
+            "effort: high\nas_of: Mar 2026\n"
+            "---\n"
+        )
+        self._write_profile("test", content)
+        cfg = prep.load_profile("test")
+        self.assertEqual(len(cfg), 9)
+        self.assertEqual(cfg["model"], "gpt-4o")
+        self.assertEqual(cfg["effort"], "high")
+        self.assertEqual(cfg["as_of"], "Mar 2026")
+
+    def test_no_frontmatter_delimiters(self):
+        self._write_profile("test", "role: SWE\ncompany: Co\ndomain: D\n")
+        with self.assertRaises(SystemExit):
+            prep.load_profile("test")
+
+    def test_body_after_frontmatter_ignored(self):
+        content = "---\nrole: SWE\ncompany: Co\ndomain: D\n---\n\n## Notes\nSome body text\nextra_key: should_not_parse\n"
+        self._write_profile("test", content)
+        cfg = prep.load_profile("test")
+        self.assertNotIn("extra_key", cfg)
+        self.assertEqual(len(cfg), 3)
+
+
+class TestCostEstimates(unittest.TestCase):
+    """Step 7: Cost estimates and --yes flag."""
+
+    def test_estimate_scales_with_calls(self):
+        _, cost8 = prep._estimate_cost(8)
+        _, cost15 = prep._estimate_cost(15)
+        self.assertGreater(cost15, cost8)
+
+    def test_estimate_uses_model_prefix(self):
+        orig = prep.MODEL
+        prep.MODEL = "gpt-5.2-pro"
+        try:
+            _, cost = prep._estimate_cost(1)
+            self.assertEqual(cost, 1.50)
+        finally:
+            prep.MODEL = orig
+
+    def test_confirm_with_yes_bypasses(self):
+        result = prep._confirm_cost(8, yes=True)
+        self.assertTrue(result)
+
+    def test_confirm_n_cancels(self):
+        with patch('builtins.input', return_value='n'):
+            result = prep._confirm_cost(8, yes=False)
+        self.assertFalse(result)
+
+    def test_confirm_empty_proceeds(self):
+        with patch('builtins.input', return_value=''):
+            result = prep._confirm_cost(8, yes=False)
+        self.assertTrue(result)
+
+
+class TestEnhancedStatus(_ProfileTestMixin, unittest.TestCase):
+    """Step 6: Enhanced cmd_status with profile listing and pipeline view."""
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self._save_profile_state()
+        self._orig_base = prep.BASE_DIR
+        prep.BASE_DIR = Path(self.tmpdir)
+
+    def tearDown(self):
+        prep.BASE_DIR = self._orig_base
+        self._restore_profile_state()
+        shutil.rmtree(self.tmpdir)
+
+    def test_legacy_output_without_profiles(self):
+        """Without profiles dir, should show legacy output."""
+        # Redirect dirs to temp so we don't read real files
+        for attr in ['IN_AGENDAS', 'IN_EPISODES', 'SYLLABUS_DIR', 'EPISODES_DIR',
+                      'RAW_DIR', 'GEM_DIR', 'NLM_DIR']:
+            new_dir = Path(self.tmpdir) / attr.lower()
+            new_dir.mkdir(parents=True)
+            setattr(prep, attr, new_dir)
+
+        import io
+        from contextlib import redirect_stdout
+        with redirect_stdout(io.StringIO()) as f:
+            prep.cmd_status()
+        output = f.getvalue()
+        self.assertIn("Agendas:", output)
+        self.assertIn("Content:", output)
+
+    def test_lists_profiles(self):
+        """When profiles exist, list them."""
+        self._write_profile("alpha", "---\nrole: SWE\ncompany: Google\ndomain: Backend\n---\n")
+        self._write_profile("beta", "---\nrole: PM\ncompany: Meta\ndomain: Product\n---\n")
+
+        # Redirect dirs to temp for legacy part
+        for attr in ['IN_AGENDAS', 'IN_EPISODES', 'SYLLABUS_DIR', 'EPISODES_DIR',
+                      'RAW_DIR', 'GEM_DIR', 'NLM_DIR']:
+            new_dir = Path(self.tmpdir) / attr.lower()
+            new_dir.mkdir(parents=True, exist_ok=True)
+            setattr(prep, attr, new_dir)
+
+        import io
+        from contextlib import redirect_stdout
+        with redirect_stdout(io.StringIO()) as f:
+            prep.cmd_status()
+        output = f.getvalue()
+        self.assertIn("Profiles:", output)
+        self.assertIn("alpha", output)
+        self.assertIn("beta", output)
+
+    def test_pipeline_status_with_profile(self):
+        """With --profile, show pipeline checklist."""
+        self._write_profile("myprep", "---\nrole: SWE\ncompany: Acme\ndomain: D\n---\n")
+        prep.set_profile("myprep")
+        prep.ensure_dirs()
+        # Create some agendas
+        for ep in range(1, 4):
+            (prep.SYLLABUS_DIR / prep.ep_file(ep, "agenda")).write_text(f"agenda {ep}", encoding="utf-8")
+
+        import io
+        from contextlib import redirect_stdout
+        with redirect_stdout(io.StringIO()) as f:
+            prep.cmd_status(profile_name="myprep")
+        output = f.getvalue()
+        self.assertIn("Profile: myprep", output)
+        self.assertIn("Pipeline:", output)
+        self.assertIn("[x] Profile created", output)
+        self.assertIn("3/15 agendas", output)
+
+    def test_next_command_printed(self):
+        """Pipeline should suggest next command."""
+        self._write_profile("myprep", "---\nrole: SWE\ncompany: Acme\ndomain: D\n---\n")
+        prep.set_profile("myprep")
+        prep.ensure_dirs()
+
+        import io
+        from contextlib import redirect_stdout
+        with redirect_stdout(io.StringIO()) as f:
+            prep.cmd_status(profile_name="myprep")
+        output = f.getvalue()
+        self.assertIn("Next:", output)
+        self.assertIn("syllabus", output)
+
+    def test_pipeline_complete(self):
+        """All stages done should show 'Pipeline complete!'."""
+        self._write_profile("myprep", "---\nrole: SWE\ncompany: Acme\ndomain: D\n---\n")
+        prep.set_profile("myprep")
+        prep.ensure_dirs()
+        for ep in prep.ALL_EPS:
+            (prep.SYLLABUS_DIR / prep.ep_file(ep, "agenda")).write_text("agenda", encoding="utf-8")
+            (prep.EPISODES_DIR / prep.ep_file(ep, "content")).write_text("content", encoding="utf-8")
+        (prep.GEM_DIR / "gem-1.md").write_text("gem content", encoding="utf-8")
+
+        import io
+        from contextlib import redirect_stdout
+        with redirect_stdout(io.StringIO()) as f:
+            prep.cmd_status(profile_name="myprep")
+        output = f.getvalue()
+        self.assertIn("Pipeline complete!", output)
+
+
+class TestContentEpisodeFlag(unittest.TestCase):
+    """Step 5: --episode N for content command."""
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self._orig = {}
+        for attr in ['IN_AGENDAS', 'IN_EPISODES', 'SYLLABUS_DIR', 'EPISODES_DIR',
+                      'RAW_DIR', 'GEM_DIR', 'NLM_DIR']:
+            self._orig[attr] = getattr(prep, attr)
+            new_dir = Path(self.tmpdir) / attr.lower()
+            new_dir.mkdir(parents=True)
+            setattr(prep, attr, new_dir)
+
+    def tearDown(self):
+        shutil.rmtree(self.tmpdir)
+        for attr, val in self._orig.items():
+            setattr(prep, attr, val)
+
+    def test_generates_only_specified_episode(self):
+        for ep in [1, 2, 3]:
+            (prep.SYLLABUS_DIR / prep.ep_file(ep, "agenda")).write_text(f"agenda {ep} " * 50, encoding="utf-8")
+        mock_resp = MagicMock(status="completed", output_text="Generated content " * 100, usage=None)
+        client = MagicMock()
+        client.responses.create.return_value = mock_resp
+
+        prep.cmd_content(client, force=True, episode=2)
+
+        # Only ep 2 should have content
+        self.assertTrue((prep.EPISODES_DIR / "episode-02-content.md").exists())
+        self.assertFalse((prep.EPISODES_DIR / "episode-01-content.md").exists())
+        self.assertFalse((prep.EPISODES_DIR / "episode-03-content.md").exists())
+        client.responses.create.assert_called_once()
+
+    def test_skips_others(self):
+        """Existing content for other episodes should be untouched."""
+        (prep.SYLLABUS_DIR / "episode-01-agenda.md").write_text("agenda 1 " * 50, encoding="utf-8")
+        (prep.EPISODES_DIR / "episode-01-content.md").write_text("old content " * 100, encoding="utf-8")
+        (prep.SYLLABUS_DIR / "episode-02-agenda.md").write_text("agenda 2 " * 50, encoding="utf-8")
+        mock_resp = MagicMock(status="completed", output_text="New content " * 100, usage=None)
+        client = MagicMock()
+        client.responses.create.return_value = mock_resp
+
+        prep.cmd_content(client, force=True, episode=2)
+
+        # ep 1 should still have old content
+        self.assertEqual((prep.EPISODES_DIR / "episode-01-content.md").read_text(encoding="utf-8"),
+                         "old content " * 100)
+
+    def test_works_with_force(self):
+        (prep.SYLLABUS_DIR / "episode-03-agenda.md").write_text("agenda 3 " * 50, encoding="utf-8")
+        (prep.EPISODES_DIR / "episode-03-content.md").write_text("old " * 100, encoding="utf-8")
+        mock_resp = MagicMock(status="completed", output_text="new content " * 100, usage=None)
+        client = MagicMock()
+        client.responses.create.return_value = mock_resp
+
+        prep.cmd_content(client, force=True, episode=3)
+
+        new = (prep.EPISODES_DIR / "episode-03-content.md").read_text(encoding="utf-8")
+        self.assertEqual(new, "new content " * 100)
+
+    def test_none_episode_processes_all(self):
+        """episode=None should process ALL_EPS (default behavior)."""
+        for ep in [1, 2]:
+            (prep.SYLLABUS_DIR / prep.ep_file(ep, "agenda")).write_text(f"agenda {ep} " * 50, encoding="utf-8")
+        mock_resp = MagicMock(status="completed", output_text="content " * 100, usage=None)
+        client = MagicMock()
+        client.responses.create.return_value = mock_resp
+
+        orig_all = prep.ALL_EPS
+        prep.ALL_EPS = [1, 2]
+        try:
+            prep.cmd_content(client, force=True, episode=None)
+        finally:
+            prep.ALL_EPS = orig_all
+
+        self.assertEqual(client.responses.create.call_count, 2)
+
+
+class TestCmdInit(unittest.TestCase):
+    """Step 4: cmd_init() creates profile skeleton."""
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self._orig_base = prep.BASE_DIR
+        prep.BASE_DIR = Path(self.tmpdir)
+
+    def tearDown(self):
+        prep.BASE_DIR = self._orig_base
+        shutil.rmtree(self.tmpdir)
+
+    def test_creates_structure(self):
+        prep.cmd_init("myprep")
+        profile_dir = Path(self.tmpdir) / "profiles" / "myprep"
+        self.assertTrue(profile_dir.is_dir())
+        self.assertTrue((profile_dir / "profile.md").exists())
+        for subdir in ["inputs/agendas", "inputs/episodes", "inputs/misc",
+                       "outputs/syllabus", "outputs/episodes", "outputs/gem",
+                       "outputs/notebooklm", "outputs/raw"]:
+            self.assertTrue((profile_dir / subdir).is_dir(), f"Missing: {subdir}")
+
+    def test_template_has_all_fields(self):
+        prep.cmd_init("myprep")
+        text = (Path(self.tmpdir) / "profiles" / "myprep" / "profile.md").read_text(encoding="utf-8")
+        for field in ["role:", "company:", "domain:", "audience:", "core_episodes:",
+                      "frontier_episodes:", "model:", "effort:", "as_of:"]:
+            self.assertIn(field, text)
+
+    def test_refuses_existing(self):
+        prep.cmd_init("myprep")
+        with self.assertRaises(SystemExit):
+            prep.cmd_init("myprep")
+
+    def test_prints_next_steps(self):
+        import io
+        from contextlib import redirect_stdout
+        with redirect_stdout(io.StringIO()) as f:
+            prep.cmd_init("myprep")
+        output = f.getvalue()
+        self.assertIn("Next steps", output)
+        self.assertIn("profile.md", output)
+        self.assertIn("python prep.py status --profile myprep", output)
+
+    def test_template_has_frontmatter_delimiters(self):
+        prep.cmd_init("myprep")
+        text = (Path(self.tmpdir) / "profiles" / "myprep" / "profile.md").read_text(encoding="utf-8")
+        self.assertTrue(text.startswith("---\n"))
+        self.assertIn("\n---\n", text)
+
+
+class TestProfileDirRedirection(_ProfileTestMixin, unittest.TestCase):
+    """Step 3: Verify all commands work with profile-redirected directories."""
+
+    PROFILE_MD = "---\nrole: SWE\ncompany: Acme\ndomain: Backend\n---\n"
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self._save_profile_state()
+        self._orig_base = prep.BASE_DIR
+        prep.BASE_DIR = Path(self.tmpdir)
+        self._write_profile("testprof", self.PROFILE_MD)
+        prep.set_profile("testprof")
+        # Create dirs so commands can write
+        prep.ensure_dirs()
+
+    def tearDown(self):
+        prep.BASE_DIR = self._orig_base
+        self._restore_profile_state()
+        shutil.rmtree(self.tmpdir)
+
+    def test_ensure_dirs_creates_profile_structure(self):
+        profile_dir = Path(self.tmpdir) / "profiles" / "testprof"
+        for subdir in ["outputs/syllabus", "outputs/episodes", "outputs/gem",
+                       "outputs/notebooklm", "outputs/raw",
+                       "inputs/agendas", "inputs/episodes", "inputs/misc"]:
+            self.assertTrue((profile_dir / subdir).is_dir(), f"Missing: {subdir}")
+
+    def test_find_agenda_searches_profile_dirs(self):
+        (prep.IN_AGENDAS / "episode-01-agenda.md").write_text("agenda", encoding="utf-8")
+        result = prep.find_agenda(1)
+        self.assertIsNotNone(result)
+        self.assertIn("testprof", str(result))
+
+    def test_find_content_searches_profile_dirs(self):
+        (prep.IN_EPISODES / "episode-02-content.md").write_text("content", encoding="utf-8")
+        result = prep.find_content(2)
+        self.assertIsNotNone(result)
+        self.assertIn("testprof", str(result))
+
+    def test_recover_uses_profile_raw_dir(self):
+        raw_text = "**Episode 1 — Title**\nContent for ep 1.\n"
+        (prep.RAW_DIR / "syllabus-02-core_batch.md").write_text(raw_text, encoding="utf-8")
+        count = prep.recover_agendas_from_raw()
+        self.assertEqual(count, 1)
+        recovered = prep.SYLLABUS_DIR / "episode-01-agenda.md"
+        self.assertTrue(recovered.exists())
+        self.assertIn("testprof", str(recovered))
+
+    def test_syllabus_outputs_to_profile(self):
+        mock_resp = MagicMock()
+        mock_resp.status = "completed"
+        mock_resp.output_text = "## Episode 1: Title\nContent\n\n## Episode 2: Title2\nContent2\n\n## Episode 3: T3\nC3\n\n## Episode 4: T4\nC4"
+        mock_resp.usage = None
+        client = MagicMock()
+        client.responses.create.return_value = mock_resp
+
+        orig_runs = prep.SYLLABUS_RUNS
+        prep.SYLLABUS_RUNS = [dict(mode="CORE_BATCH", core="1-4", frontier="")]
+        try:
+            prep.cmd_syllabus(client, force=True)
+        finally:
+            prep.SYLLABUS_RUNS = orig_runs
+
+        saved = prep.SYLLABUS_DIR / "episode-01-agenda.md"
+        self.assertTrue(saved.exists())
+        self.assertIn("testprof", str(saved))
+
+    def test_content_outputs_to_profile(self):
+        (prep.SYLLABUS_DIR / "episode-01-agenda.md").write_text("Test agenda " * 50, encoding="utf-8")
+        mock_resp = MagicMock()
+        mock_resp.status = "completed"
+        mock_resp.output_text = "Generated content " * 100
+        mock_resp.usage = None
+        client = MagicMock()
+        client.responses.create.return_value = mock_resp
+
+        orig_all = prep.ALL_EPS
+        prep.ALL_EPS = [1]
+        try:
+            prep.cmd_content(client, force=True)
+        finally:
+            prep.ALL_EPS = orig_all
+
+        saved = prep.EPISODES_DIR / "episode-01-content.md"
+        self.assertTrue(saved.exists())
+        self.assertIn("testprof", str(saved))
+
+    def test_package_outputs_to_profile(self):
+        (prep.EPISODES_DIR / "episode-01-content.md").write_text("Content for ep 1", encoding="utf-8")
+        prep.cmd_package()
+        gem = prep.GEM_DIR / "gem-1.md"
+        self.assertTrue(gem.exists())
+        self.assertIn("testprof", str(gem))
+        nlm = prep.NLM_DIR / "episode-01-content.md"
+        self.assertTrue(nlm.exists())
+        self.assertIn("testprof", str(nlm))
+
+    def test_manifest_written_to_profile_dir(self):
+        (prep.EPISODES_DIR / "episode-01-content.md").write_text("content " * 500, encoding="utf-8")
+        (prep.SYLLABUS_DIR / "episode-01-agenda.md").write_text("agenda", encoding="utf-8")
+        prep.write_manifest()
+        manifest = prep.OUTPUTS / "manifest.txt"
+        self.assertTrue(manifest.exists())
+        self.assertIn("testprof", str(manifest))
+
+    def test_add_writes_to_profile_dirs(self):
+        src = Path(self.tmpdir) / "doc.md"
+        src.write_text("Raw document content", encoding="utf-8")
+        mock_agenda = MagicMock(status="completed", output_text="Agenda text", usage=None)
+        mock_content = MagicMock(status="completed", output_text="Content text " * 50, usage=None)
+        client = MagicMock()
+        client.responses.create.side_effect = [mock_agenda, mock_content]
+
+        prep.cmd_add(client, str(src), slot=prep._total_gem_slots())
+
+        self.assertTrue((prep.SYLLABUS_DIR / "misc-doc-agenda.md").exists())
+        self.assertIn("testprof", str(prep.SYLLABUS_DIR / "misc-doc-agenda.md"))
+
+    def test_add_no_cross_profile_contamination(self):
+        """--profile A should not write to profile B's directories."""
+        # Profile B setup — just create its dirs
+        profile_b_dir = Path(self.tmpdir) / "profiles" / "profileB"
+        for subdir in ["outputs/gem", "outputs/episodes", "outputs/syllabus", "outputs/notebooklm"]:
+            (profile_b_dir / subdir).mkdir(parents=True)
+
+        src = Path(self.tmpdir) / "doc.md"
+        src.write_text("Test doc", encoding="utf-8")
+        client = MagicMock()
+        client.responses.create.side_effect = [
+            MagicMock(status="completed", output_text="Agenda", usage=None),
+            MagicMock(status="completed", output_text="Content " * 50, usage=None),
+        ]
+
+        # Currently on profile A (testprof)
+        prep.cmd_add(client, str(src))
+
+        # Profile B should have no files
+        self.assertEqual(list(profile_b_dir.rglob("*.md")), [])
+
+
+class TestSetProfile(_ProfileTestMixin, unittest.TestCase):
+    """Step 2: set_profile() redirects dirs and updates config."""
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self._save_profile_state()
+        self._orig_base = prep.BASE_DIR
+        prep.BASE_DIR = Path(self.tmpdir)
+
+    def tearDown(self):
+        prep.BASE_DIR = self._orig_base
+        self._restore_profile_state()
+        shutil.rmtree(self.tmpdir)
+
+    def test_dirs_redirected(self):
+        self._write_profile("myprep", "---\nrole: SWE\ncompany: Co\ndomain: D\n---\n")
+        prep.set_profile("myprep")
+        profile_dir = Path(self.tmpdir) / "profiles" / "myprep"
+        self.assertEqual(prep.OUTPUTS, profile_dir / "outputs")
+        self.assertEqual(prep.SYLLABUS_DIR, profile_dir / "outputs" / "syllabus")
+        self.assertEqual(prep.EPISODES_DIR, profile_dir / "outputs" / "episodes")
+        self.assertEqual(prep.GEM_DIR, profile_dir / "outputs" / "gem")
+        self.assertEqual(prep.NLM_DIR, profile_dir / "outputs" / "notebooklm")
+        self.assertEqual(prep.RAW_DIR, profile_dir / "outputs" / "raw")
+        self.assertEqual(prep.IN_AGENDAS, profile_dir / "inputs" / "agendas")
+        self.assertEqual(prep.IN_EPISODES, profile_dir / "inputs" / "episodes")
+        self.assertEqual(prep.IN_MISC, profile_dir / "inputs" / "misc")
+
+    def test_config_vars_updated(self):
+        self._write_profile("myprep", "---\nrole: Principal\ncompany: Meta\ndomain: ML\naudience: Staff\n---\n")
+        prep.set_profile("myprep")
+        self.assertEqual(prep.ROLE, "Principal")
+        self.assertEqual(prep.COMPANY, "Meta")
+        self.assertEqual(prep.DOMAIN, "ML")
+        self.assertEqual(prep.AUDIENCE, "Staff")
+
+    def test_reconfigure_triggered(self):
+        self._write_profile("myprep", "---\nrole: SWE\ncompany: Co\ndomain: D\ncore_episodes: 8\nfrontier_episodes: 2\n---\n")
+        prep.set_profile("myprep")
+        self.assertEqual(prep._CORE_COUNT, 8)
+        self.assertEqual(prep._FRONTIER_COUNT, 2)
+        self.assertEqual(prep.ALL_EPS, list(range(1, 11)))
+
+    def test_reconfigure_not_triggered_without_counts(self):
+        orig_core = prep._CORE_COUNT
+        orig_frontier = prep._FRONTIER_COUNT
+        self._write_profile("myprep", "---\nrole: SWE\ncompany: Co\ndomain: D\n---\n")
+        prep.set_profile("myprep")
+        self.assertEqual(prep._CORE_COUNT, orig_core)
+        self.assertEqual(prep._FRONTIER_COUNT, orig_frontier)
+
+    def test_prompts_dir_unchanged(self):
+        orig_prompts = prep.PROMPTS
+        self._write_profile("myprep", "---\nrole: SWE\ncompany: Co\ndomain: D\n---\n")
+        prep.set_profile("myprep")
+        self.assertEqual(prep.PROMPTS, orig_prompts)
+
+    def test_defaults_preserved_without_profile(self):
+        """Without set_profile(), all dirs should still be at defaults."""
+        # Just verify the saved state matches what we expect
+        self.assertEqual(self._profile_saved['OUTPUTS'], self._orig_base / "outputs")
+        self.assertEqual(self._profile_saved['SYLLABUS_DIR'], self._orig_base / "outputs" / "syllabus")
+
+    def test_model_and_effort_from_profile(self):
+        self._write_profile("myprep", "---\nrole: SWE\ncompany: Co\ndomain: D\nmodel: gpt-4o\neffort: high\n---\n")
+        prep.set_profile("myprep")
+        self.assertEqual(prep.MODEL, "gpt-4o")
+        self.assertEqual(prep.EFFORT, "high")
+
+    def test_as_of_from_profile(self):
+        self._write_profile("myprep", "---\nrole: SWE\ncompany: Co\ndomain: D\nas_of: Mar 2026\n---\n")
+        prep.set_profile("myprep")
+        self.assertEqual(prep.AS_OF, "Mar 2026")
+
+
+class TestMigration(unittest.TestCase):
+    """Step 8: Verify S&I content migration to profiles/security-infra/."""
+
+    _SI_PROFILE = Path(__file__).parent / "profiles" / "security-infra"
+
+    @unittest.skipUnless(
+        (Path(__file__).parent / "profiles" / "security-infra" / "profile.md").exists(),
+        "Security-infra profile not available"
+    )
+    def test_reference_profile_loads(self):
+        """security-infra profile.md should be parseable."""
+        orig_base = prep.BASE_DIR
+        try:
+            prep.BASE_DIR = Path(__file__).parent
+            config = prep.load_profile("security-infra")
+            self.assertIn("role", config)
+            self.assertIn("company", config)
+            self.assertIn("domain", config)
+        finally:
+            prep.BASE_DIR = orig_base
+
+    def test_no_content_in_toplevel_outputs(self):
+        """Top-level outputs/ should have no episode content."""
+        top_outputs = Path(__file__).parent / "outputs"
+        if not top_outputs.exists():
+            return  # dir doesn't exist yet
+        episodes = list((top_outputs / "episodes").glob("episode-*.md")) if (top_outputs / "episodes").exists() else []
+        self.assertEqual(len(episodes), 0, "Top-level outputs/ should not contain episode content")
 
 
 if __name__ == "__main__":

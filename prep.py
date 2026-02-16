@@ -149,6 +149,115 @@ def _listening_order_str():
     return " -> ".join(parts)
 
 # ---------------------------------------------------------------------------
+# PROFILES
+# ---------------------------------------------------------------------------
+_PROFILE_KNOWN_FIELDS = {
+    "role", "company", "domain", "audience",
+    "core_episodes", "frontier_episodes",
+    "model", "effort", "as_of",
+}
+_PROFILE_REQUIRED_FIELDS = {"role", "company", "domain"}
+_PROFILE_INT_FIELDS = {"core_episodes", "frontier_episodes"}
+
+def load_profile(name):
+    """Parse profiles/{name}/profile.md YAML frontmatter. Returns config dict."""
+    profile_dir = BASE_DIR / "profiles" / name
+    if not profile_dir.is_dir():
+        print(f"ERROR: profile '{name}' not found at {profile_dir}/")
+        sys.exit(1)
+    profile_path = profile_dir / "profile.md"
+    if not profile_path.exists():
+        print(f"ERROR: {profile_path} not found. Run 'python prep.py init {name}' first.")
+        sys.exit(1)
+
+    text = profile_path.read_text(encoding="utf-8")
+    lines = text.split("\n")
+
+    # Find frontmatter delimiters
+    delimiters = [i for i, line in enumerate(lines) if line.strip() == "---"]
+    if len(delimiters) < 2:
+        print(f"ERROR: {profile_path} has no YAML frontmatter (expected --- delimiters)")
+        sys.exit(1)
+
+    config = {}
+    for line in lines[delimiters[0] + 1 : delimiters[1]]:
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        if ":" not in stripped:
+            continue
+        key, _, value = stripped.partition(":")
+        key = key.strip().lower()
+        value = value.strip().strip('"').strip("'")
+        if not value:
+            continue
+
+        if key not in _PROFILE_KNOWN_FIELDS:
+            print(f"WARNING: unknown field '{key}' in {profile_path.name}")
+        config[key] = value
+
+    # Validate required fields
+    for field in _PROFILE_REQUIRED_FIELDS:
+        if field not in config:
+            print(f"ERROR: {profile_path.name} missing required field '{field}'.")
+            sys.exit(1)
+
+    # Validate integer fields
+    for field in _PROFILE_INT_FIELDS:
+        if field in config:
+            try:
+                val = int(config[field])
+                if val <= 0:
+                    raise ValueError()
+                config[field] = val
+            except (ValueError, TypeError):
+                print(f"ERROR: {field} must be a positive integer, got '{config[field]}'.")
+                sys.exit(1)
+
+    return config
+
+
+def set_profile(name):
+    """Load a profile and redirect all directory constants + config vars."""
+    global OUTPUTS, SYLLABUS_DIR, EPISODES_DIR, GEM_DIR, NLM_DIR, RAW_DIR
+    global IN_AGENDAS, IN_EPISODES, IN_MISC
+    global ROLE, COMPANY, DOMAIN, AUDIENCE, MODEL, EFFORT, AS_OF
+
+    config = load_profile(name)
+
+    # Redirect directories to profile paths (PROMPTS stays shared)
+    profile_dir = BASE_DIR / "profiles" / name
+    OUTPUTS      = profile_dir / "outputs"
+    SYLLABUS_DIR = OUTPUTS / "syllabus"
+    EPISODES_DIR = OUTPUTS / "episodes"
+    GEM_DIR      = OUTPUTS / "gem"
+    NLM_DIR      = OUTPUTS / "notebooklm"
+    RAW_DIR      = OUTPUTS / "raw"
+    IN_AGENDAS   = profile_dir / "inputs" / "agendas"
+    IN_EPISODES  = profile_dir / "inputs" / "episodes"
+    IN_MISC      = profile_dir / "inputs" / "misc"
+
+    # Update config vars from profile (fallback to current values)
+    ROLE     = config.get("role", ROLE)
+    COMPANY  = config.get("company", COMPANY)
+    DOMAIN   = config.get("domain", DOMAIN)
+    AUDIENCE = config.get("audience", AUDIENCE)
+    MODEL    = config.get("model", MODEL)
+    EFFORT   = config.get("effort", EFFORT)
+    AS_OF    = config.get("as_of", AS_OF)
+
+    # Reconfigure episode counts if profile overrides them
+    core = config.get("core_episodes")
+    frontier = config.get("frontier_episodes")
+    if core is not None or frontier is not None:
+        _reconfigure(
+            core if core is not None else _CORE_COUNT,
+            frontier if frontier is not None else _FRONTIER_COUNT,
+        )
+
+    return config
+
+# ---------------------------------------------------------------------------
 # OPENAI CLIENT
 # ---------------------------------------------------------------------------
 EFFORT = os.environ.get("OPENAI_EFFORT", "xhigh")  # xhigh | high | medium | low
@@ -319,10 +428,17 @@ def render_template(text):
     t = t.replace("{AS_OF_DATE}", AS_OF)
     return t
 
-# System instructions for each prompt type
-SYLLABUS_INSTRUCTIONS = f"You are a {ROLE} at {COMPANY} acting as an expert interview coach. Follow the prompt instructions exactly. Output ONLY what the MODE asks for."
-CONTENT_INSTRUCTIONS = f"You are a {ROLE} at {COMPANY} acting as an expert interview coach. Generate a dense, Staff-level technical content document. Output ONLY the content document."
-DISTILL_INSTRUCTIONS = f"You are a {ROLE} at {COMPANY} acting as an expert interview coach. Distill the provided document into an interview prep episode agenda. Output ONLY the agenda."
+def _syllabus_instructions():
+    """System instructions for syllabus generation (dynamic for profile support)."""
+    return f"You are a {ROLE} at {COMPANY} acting as an expert interview coach. Follow the prompt instructions exactly. Output ONLY what the MODE asks for."
+
+def _content_instructions():
+    """System instructions for content generation (dynamic for profile support)."""
+    return f"You are a {ROLE} at {COMPANY} acting as an expert interview coach. Generate a dense, Staff-level technical content document. Output ONLY the content document."
+
+def _distill_instructions():
+    """System instructions for document distillation (dynamic for profile support)."""
+    return f"You are a {ROLE} at {COMPANY} acting as an expert interview coach. Distill the provided document into an interview prep episode agenda. Output ONLY the agenda."
 
 # ---------------------------------------------------------------------------
 # PARSING
@@ -462,7 +578,7 @@ def cmd_syllabus(client, force=False):
         else:
             user_input = prompt
 
-        resp = call_llm(client, SYLLABUS_INSTRUCTIONS, user_input, label=tag)
+        resp = call_llm(client, _syllabus_instructions(), user_input, label=tag)
         if not resp:
             print(f"  FAIL {tag}"); return False
 
@@ -490,13 +606,14 @@ def cmd_syllabus(client, force=False):
     print("\n=== SYLLABUS COMPLETE ===\n")
     return True
 
-def cmd_content(client, force=False):
+def cmd_content(client, force=False, episode=None):
     print("\n=== CONTENT GENERATION ===\n")
     if force: print("  (--force: regenerating all)\n")
     recover_agendas_from_raw()
     gen = skip = 0
 
-    for ep in ALL_EPS:
+    eps_to_process = [episode] if episode is not None else ALL_EPS
+    for ep in eps_to_process:
         c = find_content(ep)
         if not force and c:
             if len(c.read_text(encoding="utf-8").strip()) < 500:
@@ -514,7 +631,7 @@ def cmd_content(client, force=False):
             print(f"  warn ep {ep:02d} - agenda file is empty ({ag})"); continue
 
         prompt = content_prompt(agenda_text)
-        resp = call_llm(client, CONTENT_INSTRUCTIONS, prompt, label=f"Episode {ep:02d}")
+        resp = call_llm(client, _content_instructions(), prompt, label=f"Episode {ep:02d}")
         if not resp:
             print(f"  FAIL ep {ep:02d}"); continue
 
@@ -589,13 +706,13 @@ def cmd_add(client, filepath, slot=None):
 
     # Step 1: Distill
     print("  1. Distill -> Agenda")
-    agenda = call_llm(client, DISTILL_INSTRUCTIONS, distill_prompt(raw), "Distill")
+    agenda = call_llm(client, _distill_instructions(), distill_prompt(raw), "Distill")
     if not agenda: return False
     (SYLLABUS_DIR / f"misc-{name}-agenda.md").write_text(agenda, encoding="utf-8")
 
     # Step 2: Content
     print("  2. Agenda -> Content")
-    cont = call_llm(client, CONTENT_INSTRUCTIONS, content_prompt(agenda), "Content")
+    cont = call_llm(client, _content_instructions(), content_prompt(agenda), "Content")
     if not cont: return False
     (EPISODES_DIR / f"misc-{name}-content.md").write_text(cont, encoding="utf-8")
     (NLM_DIR / f"misc-{name}-content.md").write_text(cont, encoding="utf-8")
@@ -610,8 +727,8 @@ def cmd_add(client, filepath, slot=None):
     print(f"\n=== ADD COMPLETE ===\n")
     return True
 
-def cmd_status():
-    print("\n=== STATUS ===\n")
+def _show_pipeline_status():
+    """Show detailed pipeline status (agendas, content, gem files, etc.)."""
     recover_agendas_from_raw()
     print("Agendas:")
     for ep in ALL_EPS:
@@ -637,6 +754,118 @@ def cmd_status():
     print(f"\nModel: {MODEL} (effort={EFFORT})")
     print(f"API key: {'set' if key else 'NOT SET'}")
     print(f"As-of: {AS_OF}\n")
+
+
+def _profile_summary(name):
+    """One-line summary for a profile: role @ company + pipeline stage."""
+    try:
+        config = load_profile(name)
+    except SystemExit:
+        return f"{name:20s} (invalid profile)"
+    role = config.get("role", "?")
+    company = config.get("company", "?")
+
+    # Check pipeline stage
+    profile_dir = BASE_DIR / "profiles" / name
+    syllabus_dir = profile_dir / "outputs" / "syllabus"
+    episodes_dir = profile_dir / "outputs" / "episodes"
+    gem_dir = profile_dir / "outputs" / "gem"
+
+    agendas = len(list(syllabus_dir.glob("episode-*-agenda.md"))) if syllabus_dir.exists() else 0
+    content = len(list(episodes_dir.glob("episode-*-content.md"))) if episodes_dir.exists() else 0
+    gems = len(list(gem_dir.glob("gem-*.md"))) if gem_dir.exists() else 0
+
+    if gems > 0:
+        stage = "packaged"
+    elif content > 0:
+        stage = "content generated"
+    elif agendas > 0:
+        stage = "syllabus generated"
+    else:
+        stage = "profile created"
+
+    return f"{name:20s} {role} @ {company:20s} {stage}"
+
+
+def cmd_status(profile_name=None):
+    print("\n=== STATUS ===\n")
+
+    if profile_name:
+        # Show pipeline status for specific profile
+        print(f"Profile: {profile_name} ({ROLE} @ {COMPANY})\n")
+        print(f"  Config:        {_CORE_COUNT} core + {_FRONTIER_COUNT} frontier episodes, model={MODEL}\n")
+
+        # Pipeline checklist
+        profile_dir = BASE_DIR / "profiles" / profile_name
+        agenda_count = sum(1 for ep in ALL_EPS if find_agenda(ep))
+        content_count = sum(1 for ep in ALL_EPS if find_content(ep))
+        gem_count = len(list(GEM_DIR.glob("gem-*.md"))) if GEM_DIR.exists() else 0
+        total = len(ALL_EPS)
+
+        print("  Pipeline:")
+        print(f"    [x] Profile created          {profile_dir / 'profile.md'}")
+        print(f"    [{'x' if agenda_count == total else ' '}] Syllabus generated       {SYLLABUS_DIR}/ ({agenda_count}/{total} agendas)")
+        print(f"    [{'x' if content_count == total else ' '}] Content generated        {EPISODES_DIR}/ ({content_count}/{total} episodes)")
+        print(f"    [{'x' if gem_count > 0 else ' '}] Packaged                 {GEM_DIR}/ ({gem_count} gem files)")
+
+        # Next command
+        if agenda_count < total:
+            print(f"\n  Next: python prep.py syllabus --profile {profile_name}")
+        elif content_count < total:
+            print(f"\n  Next: python prep.py content --profile {profile_name}")
+        elif gem_count == 0:
+            print(f"\n  Next: python prep.py package --profile {profile_name}")
+        else:
+            print(f"\n  Pipeline complete!")
+        print()
+        return
+
+    # Without --profile: list all profiles, then show legacy status
+    profiles_dir = BASE_DIR / "profiles"
+    if profiles_dir.is_dir():
+        profile_names = sorted(
+            d.name for d in profiles_dir.iterdir()
+            if d.is_dir() and (d / "profile.md").exists()
+        )
+        if profile_names:
+            print("Profiles:")
+            for name in profile_names:
+                print(f"  {_profile_summary(name)}")
+            print()
+
+    _show_pipeline_status()
+
+# Cost per API call by model prefix (rough estimates in USD)
+_COST_PER_CALL = {
+    "gpt-5.2": 1.50,
+    "o3": 2.00,
+    "o4-mini": 0.20,
+    "o4": 1.00,
+    "gpt-4.1": 0.50,
+    "gpt-4o": 0.30,
+}
+
+def _estimate_cost(num_calls):
+    """Return (num_calls, estimated_cost_usd) based on current MODEL."""
+    cost = 0.50  # fallback
+    for prefix, c in _COST_PER_CALL.items():
+        if MODEL.startswith(prefix):
+            cost = c
+            break
+    return num_calls, round(num_calls * cost, 2)
+
+def _confirm_cost(num_calls, yes=False):
+    """Print cost estimate and prompt for confirmation. Returns True to proceed."""
+    calls, est = _estimate_cost(num_calls)
+    print(f"  Estimated: {calls} API calls, ~${est:.0f}")
+    if yes:
+        return True
+    try:
+        answer = input("  Proceed? [Y/n] ").strip().lower()
+    except EOFError:
+        return True  # non-interactive (piped input)
+    return answer != "n"
+
 
 def write_manifest():
     """Write a manifest of all output files with sizes and gap detection."""
@@ -710,6 +939,53 @@ def write_manifest():
     print(f"\n  Manifest saved to {p}\n")
 
 
+def cmd_init(name):
+    """Create a new profile skeleton with template profile.md."""
+    profile_dir = BASE_DIR / "profiles" / name
+    if profile_dir.exists():
+        print(f"ERROR: profile '{name}' already exists at {profile_dir}/")
+        sys.exit(1)
+
+    # Create directory structure
+    for subdir in ["inputs/agendas", "inputs/episodes", "inputs/misc",
+                   "outputs/syllabus", "outputs/episodes", "outputs/gem",
+                   "outputs/notebooklm", "outputs/raw"]:
+        (profile_dir / subdir).mkdir(parents=True, exist_ok=True)
+
+    # Write template profile.md
+    template = (
+        "---\n"
+        "role: \n"
+        "company: \n"
+        "domain: \n"
+        "audience: \n"
+        "core_episodes: 12\n"
+        "frontier_episodes: 3\n"
+        "model: gpt-5.2-pro\n"
+        "effort: xhigh\n"
+        "as_of: \n"
+        "---\n"
+        "\n"
+        "## Notes\n"
+        "Add any extra context here.\n"
+    )
+    (profile_dir / "profile.md").write_text(template, encoding="utf-8")
+
+    print(f"Created profile '{name}' at {profile_dir}/")
+    print(f"""
+Next steps:
+  1. Edit your profile:
+       {profile_dir / 'profile.md'}
+     Fill in role, company, domain, and other fields.
+
+  2. Add your job description (optional):
+       cp your-jd.md {profile_dir / 'inputs'}/job-description.md
+
+  3. Check your profile:
+       python prep.py status --profile {name}
+""")
+
+
 def cmd_all(client, force=False):
     print("\n" + "="*60)
     print("  FULL PIPELINE")
@@ -733,35 +1009,65 @@ def cmd_all(client, force=False):
 # ---------------------------------------------------------------------------
 def main():
     p = argparse.ArgumentParser(description="Interview Prep Pipeline")
-    p.add_argument("command", choices=["all","syllabus","content","add","package","status","render"])
-    p.add_argument("file", nargs="?", help="File path for 'add' or 'render'")
-    total = _total_gem_slots()
-    p.add_argument("--gem-slot", type=int, default=total, choices=range(1, total + 1),
-                   help=f"Gem slot for misc content (default: {total})")
+    p.add_argument("command", choices=["all","syllabus","content","add","package","status","render","init"])
+    p.add_argument("file", nargs="?", help="File path for 'add'/'render', or profile name for 'init'")
+    p.add_argument("--profile", type=str, default=None,
+                   help="Profile name (uses profiles/{name}/ for config and data)")
+    p.add_argument("--gem-slot", type=int, default=None,
+                   help="Gem slot for misc content (default: last slot)")
+    p.add_argument("--episode", type=int, default=None,
+                   help="Generate content for a single episode only")
     p.add_argument("--force", action="store_true",
                    help="Regenerate everything, even if files exist")
+    p.add_argument("--yes", action="store_true",
+                   help="Skip cost confirmation prompts")
     args = p.parse_args()
 
-    ensure_dirs()
+    # Handle init before profile loading (profile doesn't exist yet)
+    if args.command == "init":
+        name = args.file
+        if not name:
+            print("Usage: python prep.py init <profile-name>")
+            sys.exit(1)
+        cmd_init(name)
+        return
 
-    if args.command == "status":  cmd_status(); return
+    # Load profile if specified (redirects dirs + sets config)
+    if args.profile:
+        set_profile(args.profile)
+
+    # Validate --gem-slot after profile loading (choices depend on episode counts)
+    if args.gem_slot is None:
+        args.gem_slot = _total_gem_slots()
+    elif not (1 <= args.gem_slot <= _total_gem_slots()):
+        p.error(f"--gem-slot must be 1-{_total_gem_slots()}")
+
+    # Validate --episode
+    if args.episode is not None and args.episode not in ALL_EPS:
+        p.error(f"--episode must be one of {ALL_EPS[0]}-{ALL_EPS[-1]}")
+
+    # Only create dirs for write commands
+    if args.command in ("all", "syllabus", "content", "add", "package"):
+        ensure_dirs()
+
+    if args.command == "status":  cmd_status(profile_name=args.profile); return
     if args.command == "package": cmd_package(); return
     if args.command == "render":
         if not args.file:
             print("Usage: python prep.py render <prompt-file>")
             sys.exit(1)
-        p = Path(args.file)
-        if not p.exists():
-            print(f"ERROR: {p} not found")
+        rp = Path(args.file)
+        if not rp.exists():
+            print(f"ERROR: {rp} not found")
             sys.exit(1)
-        print(render_template(p.read_text(encoding="utf-8")), end="")
+        print(render_template(rp.read_text(encoding="utf-8")), end="")
         return
 
     client = get_client()
     force = args.force
     if args.command == "all":      cmd_all(client, force)
     elif args.command == "syllabus": cmd_syllabus(client, force)
-    elif args.command == "content":  cmd_content(client, force)
+    elif args.command == "content":  cmd_content(client, force, episode=args.episode)
     elif args.command == "add":
         if not args.file:
             print("Usage: python prep.py add <file> [--gem-slot N]")
