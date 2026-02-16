@@ -6,13 +6,14 @@ Interview prep content pipeline. Generates a 15-episode technical deep-dive syll
 
 ## Key files
 
-- `prep.py` — Main pipeline script (single file, ~900 lines)
-- `test_prep.py` — ~240 unit tests
+- `prep.py` — Main pipeline script (single file, ~1270 lines)
+- `test_prep.py` — ~290 unit tests
 - `requirements.txt` — Python dependencies (openai>=2.0.0)
 - `profiles/security-infra/` — Reference profile with generated content
 - `prompts/syllabus.md` — Syllabus generation prompt (uses `.replace()`)
 - `prompts/content.md` — Content generation prompt (uses `.replace()`)
 - `prompts/distill.md` — Document distillation prompt (uses `.replace()`)
+- `prompts/intake.md` — Domain intake interview (generates adapted files, $0 cost)
 - `prompts/gem.md` — Gemini Gem system prompt (manual use, not processed by pipeline)
 - `prompts/notebooklm.md` — NotebookLM podcast prompt (manual use, not processed by pipeline)
 - `prompts/notebooklm-frames.md` — Per-episode frames that seed each NotebookLM podcast run
@@ -22,7 +23,7 @@ Interview prep content pipeline. Generates a 15-episode technical deep-dive syll
 
 Pipeline flow: `syllabus` (8 runs) -> `content` (15 episodes) -> `package` (gem + notebooklm)
 
-Multi-profile support: `--profile <name>` redirects all I/O to `profiles/<name>/`. Without `--profile`, uses top-level `outputs/` and `inputs/` with env vars.
+Multi-profile support: `--profile <name>` redirects all I/O to `profiles/<name>/`. API commands (`all`, `syllabus`, `content`, `add`) require `--profile`; non-API commands (`status`, `render`, `package`) work without it.
 
 Role is parameterized via env vars (`PREP_ROLE`, `PREP_COMPANY`, `PREP_DOMAIN`, `PREP_AUDIENCE`) or profile config — no hardcoded role/company in code or prompts.
 
@@ -34,9 +35,9 @@ System instructions (`_syllabus_instructions()`, `_content_instructions()`, `_di
 
 ```bash
 python prep.py init <profile-name>        # Create new profile skeleton
-python prep.py all    [--profile P]       # Full pipeline
-python prep.py syllabus [--profile P]     # Generate agendas only
-python prep.py content [--profile P] [--episode N]  # Generate content
+python prep.py all    --profile P        # Full pipeline
+python prep.py syllabus --profile P      # Generate agendas only
+python prep.py content --profile P [--episode N]  # Generate content
 python prep.py add <file> --gem-slot N    # Distill doc -> content -> package
 python prep.py package [--profile P]      # Repackage outputs
 python prep.py render <file> [--profile P] # Substitute env vars, print to stdout

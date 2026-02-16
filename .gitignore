@@ -10,5 +10,4 @@ venv/
 *.zip
 *-backup.py
 all-content-old.md
-outputs/notebooklm/*.txt
-outputs/manifest.txt
+**/outputs/manifest.txt

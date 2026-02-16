@@ -129,6 +129,8 @@ Each episode content document becomes a podcast source. For each episode:
 3. Paste the episode frame from `prompts/notebooklm-frames.md` + the system prompt from `prompts/notebooklm.md`
 4. Generate the podcast
 
+> **Note:** The shipped `prompts/notebooklm-frames.md` contains episode frames specific to the Security & Infrastructure reference profile. Write your own frames when adapting to a new domain.
+
 ### Gemini Gem Coaching Bot
 
 The Gem acts as an interview coach with two personas, three modes, and a concept tracking system:

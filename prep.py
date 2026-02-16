@@ -1175,6 +1175,7 @@ def cmd_all(client, force=False):
 # MAIN
 # ---------------------------------------------------------------------------
 def main():
+    sys.stdout.reconfigure(encoding="utf-8")
     p = argparse.ArgumentParser(description="Interview Prep Pipeline")
     p.add_argument("command", choices=["all","syllabus","content","add","package","status","render","init"])
     p.add_argument("file", nargs="?", help="File path for 'add'/'render', or profile name for 'init'")

@@ -24,6 +24,6 @@ Incorporate interviewer info (LinkedIn profiles, published articles) to tailor c
 
 Run the intake interview locally instead of pasting into an external AI. Deferred — marginal benefit when paste-into-any-AI works.
 
-## Model-agnostic API calls
+## ~~Model-agnostic API calls~~ ✅
 
-`call_llm()` passes `reasoning={"effort": ...}` and `text={"verbosity": "high"}` unconditionally, but these are model-specific: `o4-mini` and `o3` reject `verbosity: "high"`, `gpt-4.1-mini` rejects `reasoning.effort` entirely, and `gpt-5.2-pro` doesn't support `effort: "low"`. The fix: detect model capabilities (or catch 400s and retry without unsupported params), so the pipeline works with cheaper models for smoke tests and iteration. Discovered during API smoke testing of dynamic episode counts.
+Done. `_MODEL_CAPS` now carries per-model allowed effort levels, `_clamp_effort()` adjusts invalid efforts to the nearest valid level, and `call_llm()` has a `BadRequestError` safety net that strips unsupported params on 400s. Cost table updated with `gpt-5.2-pro` and `gpt-4o-mini`.
