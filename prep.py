@@ -870,7 +870,11 @@ def _show_pipeline_status():
     print("\nGem files:")
     for i in range(1, _total_gem_slots() + 1):
         g = GEM_DIR / f"gem-{i}.md"
-        print(f"  gem-{i}.md: {'Y ' + f'{len(g.read_text(encoding="utf-8")):,} chars' if g.exists() else 'X'}")
+        if g.exists():
+            chars = len(g.read_text(encoding="utf-8"))
+            print(f"  gem-{i}.md: Y {chars:,} chars")
+        else:
+            print(f"  gem-{i}.md: X")
 
     print(f"\nMisc: {len(list(EPISODES_DIR.glob('misc-*')))} episodes")
 
