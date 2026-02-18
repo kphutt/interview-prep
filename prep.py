@@ -5,18 +5,21 @@ prep.py - Interview Prep Content Pipeline
 Automates: Syllabus (8 runs) -> Content (per episode) -> Package (Gem + NotebookLM)
 
 Usage:
-    python prep.py all                          # Full pipeline
-    python prep.py syllabus                     # Generate syllabus only
-    python prep.py content                      # Generate content for all agendas
-    python prep.py add <file> [--gem-slot N]    # Distill doc -> agenda -> content
-    python prep.py package                      # Repackage into gem + notebooklm
-    python prep.py status                       # Show what exists
+    python prep.py init <profile-name>                    # Create new profile skeleton
+    python prep.py setup  --profile P                     # Generate adapted/ files via API
+    python prep.py all    --profile P                     # Full pipeline
+    python prep.py syllabus --profile P                   # Generate agendas only
+    python prep.py content --profile P [--episode N]      # Generate content
+    python prep.py add <file> --profile P [--gem-slot N]  # Distill doc -> content -> package
+    python prep.py package [--profile P]                  # Repackage outputs
+    python prep.py render <file> [--profile P]            # Substitute env vars, print to stdout
+    python prep.py status  [--profile P]                  # Show what exists
 
 Setup:
     pip install -r requirements.txt
     cp .env.example .env   # edit .env with your API key
     set -a && source .env && set +a
-    python prep.py all
+    python prep.py setup --profile <name>
 """
 
 import argparse

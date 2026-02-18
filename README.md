@@ -242,11 +242,11 @@ Note: input must be UTF-8 text (not binary PDF).
 
 | Directory | Contents |
 |-----------|----------|
-| `outputs/syllabus/` | Episode agendas — one per episode, plus `scaffold.md` and `final_merge.md` |
-| `outputs/episodes/` | Full content documents — the canonical study material |
-| `outputs/notebooklm/` | Same episode files, copied for easy NotebookLM upload |
-| `outputs/gem/` | Episodes merged in pairs (ep 1-2 → gem-1.md, ep 3-4 → gem-2.md, etc.) to fit Gem token limits |
-| `outputs/raw/` | Raw API responses — backup for debugging. If something goes wrong, these preserve the original LLM output |
+| `profiles/<name>/outputs/syllabus/` | Episode agendas — one per episode, plus `scaffold.md` and `final_merge.md` |
+| `profiles/<name>/outputs/episodes/` | Full content documents — the canonical study material |
+| `profiles/<name>/outputs/notebooklm/` | Same episode files, copied for easy NotebookLM upload |
+| `profiles/<name>/outputs/gem/` | Episodes merged in pairs (ep 1-2 → gem-1.md, ep 3-4 → gem-2.md, etc.) to fit Gem token limits |
+| `profiles/<name>/outputs/raw/` | Raw API responses — backup for debugging. If something goes wrong, these preserve the original LLM output |
 
 ### NotebookLM Podcasts
 
