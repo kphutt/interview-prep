@@ -1,6 +1,6 @@
-# Plan: Profiles, Intake, and Dynamic Pipeline
+# Plan: Profiles, Intake, and Dynamic Pipeline — DONE
 
-**Last updated: Feb 15, 2026**
+**Last updated: Feb 17, 2026**
 
 Cross-references: [brainstorm.md](brainstorm.md) | [decisions.md](decisions.md) | [backlog.md](../backlog.md)
 
