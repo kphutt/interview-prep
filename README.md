@@ -2,30 +2,108 @@
 
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue?logo=python&logoColor=white)](https://www.python.org)
 [![License: MIT](https://img.shields.io/badge/license-MIT-yellow.svg)](LICENSE)
-[![Tests: 291 passed](https://img.shields.io/badge/tests-291_passed-brightgreen)]()
+[![Tests: passing](https://img.shields.io/badge/tests-passing-brightgreen)]()
 
-A prompt-engineering pipeline that generates technical deep-dive content using OpenAI's Responses API, packaged for NotebookLM podcasts and a Gemini coaching bot. Works for any interview domain via profiles.
+Preparing for a Staff+ technical interview? This tool generates a personalized study syllabus for your domain, then turns each episode into a deep-dive document you can study from, listen to as a podcast (via NotebookLM), or practice with an AI coaching bot (via Gemini Gem).
 
-The prompts are the crown jewels — they define episode structure, depth targets, and quality self-checks that consistently produce Staff-level technical content. The repo ships with 15 episodes of Security & Infrastructure content as a reference profile.
+You describe your target role and domain; the pipeline generates Staff-level technical content tailored to your interviews. Ships with a complete Security & Infrastructure reference profile.
 
-## Quick Start
+The prompts are the crown jewels — they define episode structure, depth targets, and quality self-checks that consistently produce Staff-level technical content.
+
+## What You Get
+
+The pipeline produces three outputs from your domain description:
+
+1. **Deep-dive study documents** — one episode per topic covering your domain end-to-end, each with Hook, Mental Model, L4 Trap (common wrong answers), Nitty Gritty (protocol/wire details), and Interviewer Probes sections
+2. **NotebookLM podcasts** — each episode becomes a podcast you can listen to during commutes
+3. **Gemini Gem coaching bot** — an interview coach with rapid-fire, mock interview, and explore modes
+
+**Sample episode titles** (from the Security & Infrastructure reference profile):
+
+- Ep 1 — The Binding Problem: mTLS vs DPoP for Sender-Constrained OAuth Tokens
+- Ep 2 — The Session Kill Switch: Event-Driven Revocation with CAEP/RISC
+- Ep 3 — Mobile Identity: Defeating the Confused Deputy with Universal/App Links + PKCE
+- Ep 5 — BeyondCorp: Building a Zero-Trust Proxy (Identity-Aware Access Without the VPN)
+- Ep 8 — Supply Chain Security: SLSA Provenance + Deploy-Time Verification
+- Ep 10 — Crypto Agility (Post-Quantum): Hybrid TLS + "Rotate the Math Without a Code Push"
+- Ep 11 — Envelope Encryption: Rotate Access to Petabytes by Re-wrapping Keys, Not Data
+
+**Sample content depth** (from Episode 1 — Hook section):
+
+> Bearer JWTs are spendable "anywhere, immediately" once copied (logs, headers, JS); sender-constraint reduces replay, but only if enforcement happens at the right hop (edge vs app) without introducing a new single point of failure.
+>
+> mTLS binding is operationally "clean" for controlled server-to-server clients, but certificate issuance/rotation/revocation is a full product with pager load; adoption failures tend to be spiky and correlated (one bad renewal script can take out a partner cohort).
+>
+> DPoP fits public clients (mobile/SPAs) but shifts cost to the hot path: per-request signed proofs + replay caches + nonce retry logic; at 200k RPS the CPU and p99 budget impact is real, not theoretical.
+
+Browse the full reference profile: `profiles/security-infra/outputs/episodes/`
+
+## Prerequisites
+
+- **Python 3.9+**
+- **OpenAI API key** — get one at [platform.openai.com](https://platform.openai.com)
+- Default model is `gpt-5.2-pro`; if you don't have access, set `model: gpt-4o-mini` in your profile.md
+- Examples use bash/zsh; see [Troubleshooting](#troubleshooting) for Windows PowerShell and Fish
+
+## Getting Started
 
 ```bash
-pip install -r requirements.txt
+# Install dependencies
+pip3 install -r requirements.txt
 
+# Configure API key
 cp .env.example .env
-# Edit .env: add your OPENAI_API_KEY
+# Edit .env: set OPENAI_API_KEY=sk-...
 
-# Load config
+# Load config into your shell
 set -a && source .env && set +a
 
-# Create a profile for your domain
-python prep.py init my-domain
+# See what a complete profile looks like
+python3 prep.py status --profile security-infra
 
-# Generate adapted content (see "Adapting to a New Domain" below)
-# Then generate everything:
-python prep.py all --profile my-domain
+# Create a profile for your domain
+python3 prep.py init my-domain
+
+# Generate your adapted content (required before running the pipeline):
+# Paste prompts/intake.md into any AI chat (ChatGPT, Claude, Gemini).
+# It will interview you about your role and domain, then generate adapted files.
+# Save them into profiles/my-domain/ (see "Adapting to a New Domain" below).
+
+# Validate your profile is ready
+python3 prep.py status --profile my-domain
+
+# Generate everything (pipeline shows cost estimate before proceeding)
+python3 prep.py all --profile my-domain
 ```
+
+## Try It Before You Buy It
+
+You don't have to spend anything to evaluate the pipeline. Start small and build confidence:
+
+**$0 — Browse and plan:**
+- Browse `profiles/security-infra/outputs/episodes/` to see output quality
+- Run `python3 prep.py status --profile security-infra` to see what a complete profile looks like
+- Paste `prompts/intake.md` into any AI chat to generate your domain files (no API cost)
+
+**Pennies — Validate the pipeline end-to-end:**
+- The `smoketest` profile ships with 2 episodes + gpt-4o-mini:
+  ```bash
+  python3 prep.py all --profile smoketest --yes
+  ```
+
+**Cheap — Test your domain with gpt-4o-mini:**
+- Set `model: gpt-4o-mini` in your profile.md, then:
+  ```bash
+  python3 prep.py syllabus --profile my-domain --yes
+  ```
+- Review the generated agendas in `profiles/my-domain/outputs/syllabus/` before committing to full content generation
+
+**Full pipeline:**
+- Switch to `model: gpt-5.2-pro` in your profile.md, then:
+  ```bash
+  python3 prep.py all --profile my-domain
+  ```
+- The pipeline shows a cost estimate and asks for confirmation before making any API calls
 
 ## Profiles
 
@@ -35,7 +113,7 @@ Every interview domain lives in its own profile under `profiles/<name>/`. A prof
 profiles/my-domain/
   profile.md           <- Config: role, company, domain, model, episode counts
   adapted/             <- Domain-specific content injected into shared prompts
-    seeds.md             Episode seed data (12 episodes)
+    seeds.md             Episode seed data
     coverage.md          Coverage framework (e.g., CISSP, DAMA-DMBOK)
     lenses.md            Domain lens, Nitty Gritty layout, requirements, stakeholders
     gem-sections.md      Gem coaching bot: bookshelf, examples, format
@@ -61,12 +139,12 @@ All API commands (`all`, `syllabus`, `content`, `add`) require `--profile`.
 |---------|-------------|
 | `prep.py init <name>` | Create new profile skeleton with adapted/ stubs |
 | `prep.py all --profile P` | Full pipeline: syllabus -> content -> package |
-| `prep.py syllabus --profile P` | Generate agendas only (8 API calls) |
+| `prep.py syllabus --profile P` | Generate agendas only |
 | `prep.py content --profile P` | Generate content for existing agendas |
 | `prep.py content --profile P --episode 5` | Generate content for one episode |
-| `prep.py add doc.pdf --profile P` | Distill doc -> content -> package |
-| `prep.py package --profile P` | Repackage outputs into Gem + NotebookLM |
-| `prep.py render prompts/gem.md --profile P` | Substitute vars and print to stdout |
+| `prep.py add doc.md --profile P [--gem-slot N]` | Distill doc -> content -> package |
+| `prep.py package [--profile P]` | Repackage outputs into Gem + NotebookLM |
+| `prep.py render prompts/gem.md [--profile P]` | Substitute vars and print to stdout |
 | `prep.py status` | List all profiles |
 | `prep.py status --profile P` | Show pipeline progress for a profile |
 
@@ -77,36 +155,47 @@ Common flags: `--force` (regenerate existing), `--yes` (skip cost confirmation).
 ### 1. Create a profile
 
 ```bash
-python prep.py init data-eng
+python3 prep.py init data-eng
 ```
 
-This creates `profiles/data-eng/` with a template `profile.md` and 4 stub files in `adapted/`.
+This creates `profiles/data-eng/` with a template `profile.md` and stub files in `adapted/`.
 
 ### 2. Generate adapted content
 
-Paste `prompts/intake.md` into any AI chat (ChatGPT, Claude, Gemini). The intake prompt interviews you about your role, domain, and sub-areas, then generates all 5 files (`profile.md` + 4 adapted files) ready to copy-paste into your profile directory.
+Paste `prompts/intake.md` into any AI chat (ChatGPT, Claude, Gemini). The intake is an interactive conversation — the AI will ask about your role, domain, and sub-areas, then generate all the files you need (`profile.md` + adapted files). Each output appears in a labeled code fence — copy the contents (not the fence markers) into the matching file.
 
 Cost: $0 — the intake runs in an external conversation, not through the pipeline.
 
-### 3. Fill in your profile
+### 3. Save the generated files
 
-Save the generated files:
+Copy each generated file into your profile directory. The `profile.md` from intake replaces the template created by `init`:
+
 - `profiles/data-eng/profile.md`
 - `profiles/data-eng/adapted/seeds.md`
 - `profiles/data-eng/adapted/coverage.md`
 - `profiles/data-eng/adapted/lenses.md`
 - `profiles/data-eng/adapted/gem-sections.md`
 
-### 4. Generate content
+### 4. Validate your profile
 
 ```bash
-# Test run with a cheap model first
-python prep.py syllabus --profile data-eng --yes
+python3 prep.py status --profile data-eng
+```
+
+Confirm the adapted files are loaded and markers are detected. Fix any issues before spending on API calls.
+
+### 5. Generate content
+
+```bash
+# Test with a cheap model first
+python3 prep.py syllabus --profile data-eng --yes
 
 # Review agendas in profiles/data-eng/outputs/syllabus/
 # If satisfied, generate full content:
-python prep.py all --profile data-eng --yes
+python3 prep.py all --profile data-eng
 ```
+
+Note: `all` skips existing files, so running `syllabus` first then `all` is safe — it won't regenerate the agendas.
 
 ### Adapted file format
 
@@ -119,35 +208,69 @@ Adapted files use `<!-- MARKER_NAME -->` HTML comment delimiters to define secti
 | `lenses.md` | `DOMAIN_LENS`, `NITTY_GRITTY_LAYOUT`, `DOMAIN_REQUIREMENTS`, `DISTILL_REQUIREMENTS`, `STAKEHOLDERS` | content.md, distill.md |
 | `gem-sections.md` | `GEM_BOOKSHELF`, `GEM_EXAMPLES`, `GEM_CODING`, `GEM_FORMAT_EXAMPLES` | gem.md |
 
+## Iterating
+
+Common Day 2 workflows:
+
+**Regenerate one episode's content:**
+```bash
+python3 prep.py content --profile my-domain --episode 5
+```
+
+**Force regenerate everything** (without `--force`, existing files are skipped):
+```bash
+python3 prep.py all --profile my-domain --force
+```
+
+**Edit an agenda manually**, then regenerate its content:
+```bash
+# Edit profiles/my-domain/outputs/syllabus/episode-05-agenda.md
+python3 prep.py content --profile my-domain --episode 5
+```
+
+**Add external material** (distill a document into an episode and append to the Gem):
+```bash
+python3 prep.py add paper.md --profile my-domain
+```
+Note: input must be UTF-8 text (not binary PDF).
+
+**Change episode counts:** edit `core_episodes` / `frontier_episodes` in your profile.md and re-run.
+
 ## Using the Outputs
+
+### Output directories
+
+| Directory | Contents |
+|-----------|----------|
+| `outputs/syllabus/` | Episode agendas — one per episode, plus `scaffold.md` and `final_merge.md` |
+| `outputs/episodes/` | Full content documents — the canonical study material |
+| `outputs/notebooklm/` | Same episode files, copied for easy NotebookLM upload |
+| `outputs/gem/` | Episodes merged in pairs (ep 1-2 → gem-1.md, ep 3-4 → gem-2.md, etc.) to fit Gem token limits |
+| `outputs/raw/` | Raw API responses — backup for debugging. If something goes wrong, these preserve the original LLM output |
 
 ### NotebookLM Podcasts
 
 Each episode content document becomes a podcast source. For each episode:
+
 1. Create a new NotebookLM notebook
-2. Upload the episode content file from `outputs/episodes/`
-3. Paste the episode frame from `prompts/notebooklm-frames.md` + the system prompt from `prompts/notebooklm.md`
-4. Generate the podcast
+2. Upload the episode content file from `outputs/episodes/` as a source
+3. Find the matching episode frame in `prompts/notebooklm-frames.md` and add it as another source
+4. Copy the prompt from `prompts/notebooklm.md` and use it as the generation instruction
+5. Generate the podcast
 
 > **Note:** The shipped `prompts/notebooklm-frames.md` contains episode frames specific to the Security & Infrastructure reference profile. Write your own frames when adapting to a new domain.
 
 ### Gemini Gem Coaching Bot
 
 The Gem acts as an interview coach with two personas, three modes, and a concept tracking system:
-1. Render the Gem prompt: `python prep.py render prompts/gem.md --profile <name>`
+1. Render the Gem prompt: `python3 prep.py render prompts/gem.md --profile <name>`
 2. Create a Gemini Gem, paste the rendered prompt as system instructions
 3. Upload the gem files from `outputs/gem/` as knowledge files
 4. Start a session: "rapid fire", "interview", or "explore"
 
 ## Cost Estimates
 
-The pipeline shows a cost estimate before making API calls. Use `--yes` to skip confirmation.
-
-| Model | Full pipeline (~20 calls) | Syllabus only (~8 calls) |
-|-------|--------------------------|-------------------------|
-| gpt-5.2-pro (xhigh) | ~$25-30 | ~$10-15 |
-| gpt-5.2 (high) | ~$5-10 | ~$2-5 |
-| gpt-4o-mini | ~$0.30 | ~$0.15 |
+The pipeline shows a cost estimate before each run and asks for confirmation. Use `--yes` to skip the confirmation prompt. Cost depends on model, episode count, and reasoning effort.
 
 Tip: test with `gpt-4o-mini` first to validate your adapted content, then regenerate with a stronger model.
 
@@ -167,13 +290,25 @@ Tip: test with `gpt-4o-mini` first to validate your adapted content, then regene
 
 When using `--profile`, values in `profile.md` take precedence over env vars.
 
+## Troubleshooting
+
+| Problem | Fix |
+|---------|-----|
+| `python: command not found` | Use `python3` — macOS doesn't ship a `python` alias |
+| `ModuleNotFoundError: openai` | `pip3 install -r requirements.txt` |
+| `ERROR: OPENAI_API_KEY not set` | Edit `.env`, then `source .env` (bash/zsh). PowerShell: `$env:OPENAI_API_KEY="sk-..."`. Fish: `set -gx OPENAI_API_KEY sk-...` |
+| `ERROR: adapted/seeds.md is empty` | Run the intake prompt first — see [Adapting to a New Domain](#adapting-to-a-new-domain) |
+| `ERROR: --profile required` | Add `--profile <name>` to the command |
+| API auth / rate / model error | Check your API key and model access tier; try `model: gpt-4o-mini` in profile.md |
+| Cost seems high | The pipeline shows an estimate before each run. Test with `gpt-4o-mini` first |
+
 ## Tests
 
 ```bash
-python -m unittest test_prep -v
+python3 -m unittest test_prep -v
 ```
 
-291 tests covering prompt assembly, template structure, adapted file injection, preflight validation, profile management, file helpers, skip/resume logic, packaging, manifest generation, and edge cases.
+Tests cover prompt assembly, template structure, adapted file injection, preflight validation, profile management, file helpers, skip/resume logic, packaging, manifest generation, and edge cases.
 
 ## Platform Prompts
 
@@ -181,7 +316,7 @@ The `prompts/` directory includes:
 
 | Prompt | Purpose |
 |--------|---------|
-| `syllabus.md` | Syllabus generation (8 chunked runs: scaffold, core batches, frontiers, merge) |
+| `syllabus.md` | Syllabus generation (chunked runs: scaffold, core batches, frontiers, merge) |
 | `content.md` | Episode content generation (dense Staff-level technical documents) |
 | `distill.md` | Document distillation (whitepaper/blog -> episode agenda) |
 | `gem.md` | Gemini Gem coaching bot system prompt |
@@ -198,7 +333,7 @@ Uses the OpenAI **Responses API** (not Chat Completions) with:
 - `text.verbosity: "high"` — detailed output
 - `background: true` — no timeout risk, polls until done
 
-Each call may take 1-5 minutes with Pro + xhigh effort.
+Calls with high reasoning effort can take several minutes each.
 
 ## Design Docs
 

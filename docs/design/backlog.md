@@ -27,3 +27,16 @@ Run the intake interview locally instead of pasting into an external AI. Deferre
 ## ~~Model-agnostic API calls~~ ✅
 
 Done. `_MODEL_CAPS` now carries per-model allowed effort levels, `_clamp_effort()` adjusts invalid efforts to the nearest valid level, and `call_llm()` has a `BadRequestError` safety net that strips unsupported params on 400s. Cost table updated with `gpt-5.2-pro` and `gpt-4o-mini`.
+
+## Globals refactor / PrepConfig class
+
+Mutable globals modified by `set_profile()` and `_reconfigure()` create implicit coupling. Tests save/restore these globals in setUp/tearDown. Refactor to a `PrepConfig` class passed explicitly to functions. Unblocks clean file splitting if codebase grows. Separate design initiative.
+
+## Defensive validation hardening
+
+Several edge cases pass silently when they should error or warn:
+
+- **Empty profile field validation:** `role:` with no value passes YAML parsing but causes blank prompts
+- **cmd_content silent skip:** missing agendas cause silent episode skips; should suggest running `syllabus` first
+- **Profile name validation:** no check for spaces or special chars in profile names
+- **`add` command input format:** code only reads UTF-8 text; binary files (e.g., PDF) will fail silently or crash

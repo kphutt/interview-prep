@@ -2,12 +2,12 @@
 
 ## Project overview
 
-Interview prep content pipeline. Generates a 15-episode technical deep-dive syllabus using OpenAI's Responses API, then packages output for NotebookLM and Gemini.
+Interview prep content pipeline. Generates a technical deep-dive syllabus (configurable episode count, default 12 core + 3 frontier) using OpenAI's Responses API, then packages output for NotebookLM and Gemini.
 
 ## Key files
 
-- `prep.py` — Main pipeline script (single file, ~1270 lines)
-- `test_prep.py` — ~290 unit tests
+- `prep.py` — Main pipeline script (single file)
+- `test_prep.py` — Unit tests
 - `requirements.txt` — Python dependencies (openai>=2.0.0)
 - `profiles/security-infra/` — Reference profile with generated content
 - `prompts/syllabus.md` — Syllabus generation prompt (uses `.replace()`)
@@ -21,7 +21,7 @@ Interview prep content pipeline. Generates a 15-episode technical deep-dive syll
 
 ## Architecture
 
-Pipeline flow: `syllabus` (8 runs) -> `content` (15 episodes) -> `package` (gem + notebooklm)
+Pipeline flow: `syllabus` -> `content` -> `package` (gem + notebooklm). Episode count is set by `core_episodes` + `frontier_episodes` in profile.md (default 12+3). Syllabus run count scales with episode count.
 
 Multi-profile support: `--profile <name>` redirects all I/O to `profiles/<name>/`. API commands (`all`, `syllabus`, `content`, `add`) require `--profile`; non-API commands (`status`, `render`, `package`) work without it.
 
@@ -34,14 +34,14 @@ System instructions (`_syllabus_instructions()`, `_content_instructions()`, `_di
 ## Commands
 
 ```bash
-python prep.py init <profile-name>        # Create new profile skeleton
-python prep.py all    --profile P        # Full pipeline
-python prep.py syllabus --profile P      # Generate agendas only
-python prep.py content --profile P [--episode N]  # Generate content
-python prep.py add <file> --gem-slot N    # Distill doc -> content -> package
-python prep.py package [--profile P]      # Repackage outputs
-python prep.py render <file> [--profile P] # Substitute env vars, print to stdout
-python prep.py status  [--profile P]      # Show what exists (pipeline view with --profile)
+python3 prep.py init <profile-name>        # Create new profile skeleton
+python3 prep.py all    --profile P        # Full pipeline
+python3 prep.py syllabus --profile P      # Generate agendas only
+python3 prep.py content --profile P [--episode N]  # Generate content
+python3 prep.py add <file> --profile P [--gem-slot N]  # Distill doc -> content -> package
+python3 prep.py package [--profile P]      # Repackage outputs
+python3 prep.py render <file> [--profile P] # Substitute env vars, print to stdout
+python3 prep.py status  [--profile P]      # Show what exists (pipeline view with --profile)
 ```
 
 Common flags: `--force` (regenerate), `--yes` (skip cost confirmation), `--profile` (use profile config/dirs).
@@ -49,7 +49,7 @@ Common flags: `--force` (regenerate), `--yes` (skip cost confirmation), `--profi
 ## Testing
 
 ```bash
-python -m unittest test_prep -v
+python3 -m unittest test_prep -v
 ```
 
 Tests use `unittest` with `MagicMock` for the OpenAI client. Many tests redirect dirs to `tempfile.mkdtemp()` and restore in tearDown. No real API calls in tests.
