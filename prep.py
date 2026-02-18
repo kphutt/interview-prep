@@ -175,6 +175,21 @@ def _parse_adapted_sections(text):
     return result
 
 
+def _parse_setup_response(text):
+    """Parse setup LLM response into {filename: content} dict.
+    Splits on '=== FILE: <name> ===' delimiters."""
+    result = {}
+    parts = re.split(r'^=== FILE:\s*(\S+)\s*===\s*$', text, flags=re.MULTILINE)
+    # parts[0] is text before first delimiter (discard),
+    # then alternating: filename, content, filename, content, ...
+    for i in range(1, len(parts) - 1, 2):
+        filename = parts[i].strip()
+        content = parts[i + 1].strip()
+        if filename:
+            result[filename] = content
+    return result
+
+
 def _load_adapted(profile_name):
     """Load adapted files from profiles/{name}/adapted/. Returns dict of marker->content."""
     adapted_dir = BASE_DIR / "profiles" / profile_name / "adapted"
@@ -219,7 +234,7 @@ def _preflight_check(profile_name, command, force=False):
         f = adapted_dir / name
         if _is_stub(f):
             print(f"ERROR: adapted/{name} is empty or missing.")
-            print(f"  Run the intake prompt first — see prompts/intake.md")
+            print(f"  Run 'python3 prep.py setup --profile {profile_name}' or use prompts/intake.md manually")
             sys.exit(1)
 
     # 2. Prompt files exist
@@ -543,6 +558,19 @@ def distill_prompt(raw):
     t = t.replace("{RAW_DOCUMENT}", raw)
     return t
 
+def setup_prompt(profile_text):
+    """Build the setup prompt with profile content injected."""
+    t = load_prompt("setup")
+    # Role vars first (same pattern as other prompts)
+    t = t.replace("{PREP_ROLE}", ROLE)
+    t = t.replace("{PREP_COMPANY}", COMPANY)
+    t = t.replace("{PREP_DOMAIN}", DOMAIN)
+    t = t.replace("{PREP_AUDIENCE}", AUDIENCE)
+    t = t.replace("{AS_OF_DATE}", AS_OF)
+    # Profile content last (may contain braces)
+    t = t.replace("{PROFILE_CONTENT}", profile_text)
+    return t
+
 def render_template(text):
     """Replace all {PREP_*} and {AS_OF_DATE} placeholders with env var values."""
     t = text
@@ -566,6 +594,10 @@ def _content_instructions():
 def _distill_instructions():
     """System instructions for document distillation (dynamic for profile support)."""
     return f"You are a {ROLE} at {COMPANY} acting as an expert interview coach. Distill the provided document into an interview prep episode agenda. Output ONLY the agenda."
+
+def _setup_instructions():
+    """System instructions for setup/domain adaptation (dynamic for profile support)."""
+    return f"You are a {ROLE} at {COMPANY} acting as an expert interview coach. Generate domain-adapted configuration files for interview prep. Output ONLY the requested files in the specified format."
 
 # ---------------------------------------------------------------------------
 # PARSING
@@ -853,6 +885,71 @@ def cmd_add(client, filepath, slot=None):
 
     print(f"\n=== ADD COMPLETE ===\n")
     return True
+
+def cmd_setup(client, profile_name, force=False):
+    """Generate adapted/ files from profile.md via LLM."""
+    print(f"\n=== SETUP: {profile_name} ===\n")
+
+    profile_dir = BASE_DIR / "profiles" / profile_name
+    adapted_dir = profile_dir / "adapted"
+    adapted_files = ["seeds.md", "coverage.md", "lenses.md", "gem-sections.md"]
+
+    # Skip if adapted files already non-stub (unless --force)
+    if not force:
+        all_real = all(not _is_stub(adapted_dir / f) for f in adapted_files)
+        if all_real:
+            print("  Adapted files already exist. Use --force to regenerate.")
+            return True
+
+    # Read profile.md for context
+    profile_path = profile_dir / "profile.md"
+    profile_text = profile_path.read_text(encoding="utf-8")
+
+    # Call LLM
+    prompt = setup_prompt(profile_text)
+    resp = call_llm(client, _setup_instructions(), prompt, label="Setup adapted files")
+    if not resp:
+        print("  FAIL: LLM returned no response")
+        return False
+
+    # Save raw response
+    RAW_DIR.mkdir(parents=True, exist_ok=True)
+    (RAW_DIR / "setup-raw.md").write_text(resp, encoding="utf-8")
+    print(f"  Raw response saved to {RAW_DIR / 'setup-raw.md'}")
+
+    # Parse response into files
+    parsed = _parse_setup_response(resp)
+    if not parsed:
+        print("  ERROR: Could not parse response. Check setup-raw.md")
+        return False
+
+    # Validate and write each file
+    adapted_dir.mkdir(parents=True, exist_ok=True)
+    written = 0
+    for fname in adapted_files:
+        if fname not in parsed:
+            print(f"  WARNING: {fname} not found in LLM response")
+            continue
+        content = parsed[fname]
+        # Validate that the file has marker sections
+        sections = _parse_adapted_sections(content)
+        if not sections:
+            print(f"  WARNING: {fname} has no <!-- MARKER --> sections")
+        (adapted_dir / fname).write_text(content, encoding="utf-8")
+        print(f"  Wrote {fname} ({len(sections)} sections: {', '.join(sections.keys())})")
+        written += 1
+
+    if written == 0:
+        print("  ERROR: No files written. Check setup-raw.md")
+        return False
+
+    # Reload _ADAPTED global so subsequent commands see the new content
+    global _ADAPTED
+    _ADAPTED = _load_adapted(profile_name)
+
+    print(f"\n=== SETUP COMPLETE: {written}/{len(adapted_files)} files written ===\n")
+    return True
+
 
 def _show_pipeline_status():
     """Show detailed pipeline status (agendas, content, gem files, etc.)."""
@@ -1148,9 +1245,10 @@ Next steps:
        {profile_dir / 'profile.md'}
      Fill in role, company, domain, and other fields.
 
-  2. Generate domain-specific content:
-       Paste prompts/intake.md into any AI chat.
-       Save the generated files into {profile_dir / 'adapted'}/
+  2. Generate domain-specific content (choose one):
+     a) Automated:  python3 prep.py setup --profile {name}
+     b) Manual:     Paste prompts/intake.md into any AI chat.
+                    Save the generated files into {profile_dir / 'adapted'}/
 
   3. Check your profile:
        python prep.py status --profile {name}
@@ -1181,7 +1279,7 @@ def cmd_all(client, force=False):
 def main():
     sys.stdout.reconfigure(encoding="utf-8")
     p = argparse.ArgumentParser(description="Interview Prep Pipeline")
-    p.add_argument("command", choices=["all","syllabus","content","add","package","status","render","init"])
+    p.add_argument("command", choices=["all","syllabus","content","add","setup","package","status","render","init"])
     p.add_argument("file", nargs="?", help="File path for 'add'/'render', or profile name for 'init'")
     p.add_argument("--profile", type=str, default=None,
                    help="Profile name (uses profiles/{name}/ for config and data)")
@@ -1205,7 +1303,7 @@ def main():
         return
 
     # API commands require --profile
-    _API_COMMANDS = {"all", "syllabus", "content", "add"}
+    _API_COMMANDS = {"all", "syllabus", "content", "add", "setup"}
     if args.command in _API_COMMANDS and not args.profile:
         print(f"ERROR: --profile required for '{args.command}'.")
         print(f"  Run 'python prep.py init <name>' to create a profile.")
@@ -1226,7 +1324,7 @@ def main():
         p.error(f"--episode must be one of {ALL_EPS[0]}-{ALL_EPS[-1]}")
 
     # Only create dirs for write commands
-    if args.command in ("all", "syllabus", "content", "add", "package"):
+    if args.command in ("all", "syllabus", "content", "add", "setup", "package"):
         ensure_dirs()
 
     if args.command == "status":  cmd_status(profile_name=args.profile); return
@@ -1240,6 +1338,15 @@ def main():
             print(f"ERROR: {rp} not found")
             sys.exit(1)
         print(render_template(rp.read_text(encoding="utf-8")), end="")
+        return
+
+    # Setup runs BEFORE preflight — stubs are expected, that's the whole point
+    if args.command == "setup":
+        client = get_client()
+        if not _confirm_cost(1, yes=args.yes):
+            print("Cancelled.")
+            return
+        cmd_setup(client, args.profile, force=args.force)
         return
 
     # Pre-flight validation before API calls (runs before get_client / cost confirmation)

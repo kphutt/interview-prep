@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Unit tests for prep.py"""
 
+import argparse
 import os
 import shutil
 import sys
@@ -3257,6 +3258,292 @@ class TestRenderWithProfileInjects(_ProfileTestMixin, unittest.TestCase):
         result = prep.render_template(template)
         self.assertIn(prep.ROLE, result)
         self.assertIn("test lens value", result)
+
+
+class TestParseSetupResponse(unittest.TestCase):
+    """Test _parse_setup_response delimiter parsing."""
+
+    def test_all_four_files(self):
+        text = (
+            "=== FILE: seeds.md ===\n"
+            "<!-- DOMAIN_SEEDS -->\nEpisode 1: Test\n\n"
+            "=== FILE: coverage.md ===\n"
+            "<!-- COVERAGE_FRAMEWORK -->\nTest coverage\n\n"
+            "=== FILE: lenses.md ===\n"
+            "<!-- DOMAIN_LENS -->\nTest lens\n\n"
+            "=== FILE: gem-sections.md ===\n"
+            "<!-- GEM_BOOKSHELF -->\nTest bookshelf"
+        )
+        result = prep._parse_setup_response(text)
+        self.assertEqual(len(result), 4)
+        self.assertIn("seeds.md", result)
+        self.assertIn("coverage.md", result)
+        self.assertIn("lenses.md", result)
+        self.assertIn("gem-sections.md", result)
+        self.assertIn("DOMAIN_SEEDS", result["seeds.md"])
+
+    def test_partial_response(self):
+        text = (
+            "=== FILE: seeds.md ===\n"
+            "<!-- DOMAIN_SEEDS -->\nContent here\n\n"
+            "=== FILE: coverage.md ===\n"
+            "<!-- COVERAGE_FRAMEWORK -->\nCoverage here"
+        )
+        result = prep._parse_setup_response(text)
+        self.assertEqual(len(result), 2)
+        self.assertIn("seeds.md", result)
+        self.assertIn("coverage.md", result)
+
+    def test_empty_response(self):
+        result = prep._parse_setup_response("")
+        self.assertEqual(result, {})
+
+    def test_no_delimiters(self):
+        result = prep._parse_setup_response("Just some text without delimiters")
+        self.assertEqual(result, {})
+
+    def test_whitespace_handling(self):
+        text = (
+            "Preamble text to ignore\n\n"
+            "=== FILE: seeds.md ===\n"
+            "\n  <!-- DOMAIN_SEEDS -->\nContent\n\n"
+            "=== FILE: coverage.md ===\n"
+            "  <!-- COVERAGE_FRAMEWORK -->\nCoverage  \n"
+        )
+        result = prep._parse_setup_response(text)
+        self.assertEqual(len(result), 2)
+        # Content should be stripped
+        self.assertIn("DOMAIN_SEEDS", result["seeds.md"])
+
+    def test_content_with_braces(self):
+        text = (
+            '=== FILE: seeds.md ===\n'
+            '<!-- DOMAIN_SEEDS -->\n{"key": "value"}\n'
+        )
+        result = prep._parse_setup_response(text)
+        self.assertIn('{"key": "value"}', result["seeds.md"])
+
+
+class TestCmdSetup(_ProfileTestMixin, unittest.TestCase):
+    """Test cmd_setup LLM integration."""
+
+    _SETUP_RESPONSE = (
+        "=== FILE: seeds.md ===\n"
+        "<!-- DOMAIN_SEEDS -->\nUse the following 12 examples.\n\n"
+        "### Episode 1: Test Topic\n**Focus:** Testing\n\n"
+        "=== FILE: coverage.md ===\n"
+        "<!-- COVERAGE_FRAMEWORK -->\nTest Coverage Map\n\n"
+        "=== FILE: lenses.md ===\n"
+        "<!-- DOMAIN_LENS -->\ntest mechanisms\n\n"
+        "<!-- NITTY_GRITTY_LAYOUT -->\n1) **Test Details**\n\n"
+        "<!-- DOMAIN_REQUIREMENTS -->\n- Include test details.\n\n"
+        "<!-- DISTILL_REQUIREMENTS -->\n- 2 test details\n\n"
+        "<!-- STAKEHOLDERS -->\nTest, Product, Platform\n\n"
+        "=== FILE: gem-sections.md ===\n"
+        "<!-- GEM_BOOKSHELF -->\nTest bookshelf\n\n"
+        "<!-- GEM_EXAMPLES -->\n> Domain: \"test question\"\n\n"
+        "<!-- GEM_CODING -->\nTest coding\n\n"
+        "<!-- GEM_FORMAT_EXAMPLES -->\nFeb 10|Interview|Test|Concept|Owned|Detail|Locked"
+    )
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self._save_profile_state()
+        self._orig_base = prep.BASE_DIR
+        prep.BASE_DIR = Path(self.tmpdir)
+        # Create a valid profile
+        self._write_profile("testsetup", "---\nrole: SWE\ncompany: TestCo\ndomain: Testing\n---\n\n## Notes\nTest profile.\n")
+        self._write_adapted("testsetup", {
+            "seeds.md": "<!-- STUB: placeholder -->\n",
+            "coverage.md": "<!-- STUB: placeholder -->\n",
+            "lenses.md": "<!-- STUB: placeholder -->\n",
+            "gem-sections.md": "<!-- STUB: placeholder -->\n",
+        })
+        prep.set_profile("testsetup")
+        prep.ensure_dirs()
+
+    def tearDown(self):
+        prep.BASE_DIR = self._orig_base
+        self._restore_profile_state()
+        shutil.rmtree(self.tmpdir)
+
+    def test_writes_four_files(self):
+        mock_resp = MagicMock()
+        mock_resp.status = "completed"
+        mock_resp.output_text = self._SETUP_RESPONSE
+        mock_resp.usage = None
+        client = MagicMock()
+        client.responses.create.return_value = mock_resp
+
+        result = prep.cmd_setup(client, "testsetup")
+
+        self.assertTrue(result)
+        adapted_dir = Path(self.tmpdir) / "profiles" / "testsetup" / "adapted"
+        for fname in ["seeds.md", "coverage.md", "lenses.md", "gem-sections.md"]:
+            self.assertTrue((adapted_dir / fname).exists(), f"{fname} not written")
+            self.assertFalse(prep._is_stub(adapted_dir / fname), f"{fname} still a stub")
+
+    def test_skips_when_exist(self):
+        """Non-stub adapted files should cause skip without --force."""
+        adapted_dir = Path(self.tmpdir) / "profiles" / "testsetup" / "adapted"
+        for fname in ["seeds.md", "coverage.md", "lenses.md", "gem-sections.md"]:
+            (adapted_dir / fname).write_text("<!-- REAL -->\nReal content", encoding="utf-8")
+
+        client = MagicMock()
+        result = prep.cmd_setup(client, "testsetup", force=False)
+
+        self.assertTrue(result)
+        client.responses.create.assert_not_called()
+
+    def test_force_regenerates(self):
+        """--force should regenerate even when files exist."""
+        adapted_dir = Path(self.tmpdir) / "profiles" / "testsetup" / "adapted"
+        for fname in ["seeds.md", "coverage.md", "lenses.md", "gem-sections.md"]:
+            (adapted_dir / fname).write_text("<!-- OLD -->\nOld content", encoding="utf-8")
+
+        mock_resp = MagicMock()
+        mock_resp.status = "completed"
+        mock_resp.output_text = self._SETUP_RESPONSE
+        mock_resp.usage = None
+        client = MagicMock()
+        client.responses.create.return_value = mock_resp
+
+        result = prep.cmd_setup(client, "testsetup", force=True)
+
+        self.assertTrue(result)
+        client.responses.create.assert_called_once()
+        # Content should be updated
+        text = (adapted_dir / "seeds.md").read_text(encoding="utf-8")
+        self.assertIn("DOMAIN_SEEDS", text)
+
+    def test_saves_raw(self):
+        mock_resp = MagicMock()
+        mock_resp.status = "completed"
+        mock_resp.output_text = self._SETUP_RESPONSE
+        mock_resp.usage = None
+        client = MagicMock()
+        client.responses.create.return_value = mock_resp
+
+        prep.cmd_setup(client, "testsetup")
+
+        raw = prep.RAW_DIR / "setup-raw.md"
+        self.assertTrue(raw.exists())
+        self.assertIn("FILE: seeds.md", raw.read_text(encoding="utf-8"))
+
+    def test_reloads_adapted(self):
+        """After writing, _ADAPTED global should contain new content."""
+        mock_resp = MagicMock()
+        mock_resp.status = "completed"
+        mock_resp.output_text = self._SETUP_RESPONSE
+        mock_resp.usage = None
+        client = MagicMock()
+        client.responses.create.return_value = mock_resp
+
+        # Adapted should be empty/stubs before
+        self.assertEqual(prep._ADAPTED.get("DOMAIN_SEEDS", ""), "")
+
+        prep.cmd_setup(client, "testsetup")
+
+        # After setup, _ADAPTED should have the new content
+        self.assertIn("DOMAIN_SEEDS", prep._ADAPTED)
+        self.assertIn("12 examples", prep._ADAPTED["DOMAIN_SEEDS"])
+
+    def test_llm_failure_returns_false(self):
+        mock_resp = MagicMock()
+        mock_resp.status = "failed"
+        mock_resp.error = "test failure"
+        client = MagicMock()
+        client.responses.create.return_value = mock_resp
+
+        with patch('prep.time') as mock_time:
+            mock_time.sleep = MagicMock()
+            mock_time.time = MagicMock(return_value=0)
+            result = prep.cmd_setup(client, "testsetup")
+
+        self.assertFalse(result)
+
+
+class TestSetupPrompt(unittest.TestCase):
+    """Test setup_prompt renders correctly."""
+
+    def test_contains_role_and_domain(self):
+        result = prep.setup_prompt("---\nrole: TestRole\n---\n")
+        self.assertIn(prep.ROLE, result)
+        self.assertIn(prep.DOMAIN, result)
+        self.assertIn(prep.COMPANY, result)
+        self.assertIn(prep.AUDIENCE, result)
+
+    def test_profile_content_injected(self):
+        profile = "---\nrole: TestRole\ncompany: TestCo\n---\n\n## Notes\nSpecial notes here."
+        result = prep.setup_prompt(profile)
+        self.assertIn("Special notes here", result)
+
+    def test_no_stray_placeholders(self):
+        result = prep.setup_prompt("test profile content")
+        for placeholder in ["{PREP_ROLE}", "{PREP_COMPANY}", "{PREP_DOMAIN}",
+                            "{PREP_AUDIENCE}", "{AS_OF_DATE}", "{PROFILE_CONTENT}"]:
+            self.assertNotIn(placeholder, result)
+
+
+class TestSetupInMainFlow(unittest.TestCase):
+    """Test setup command integration in main()."""
+
+    def test_setup_requires_profile(self):
+        with self.assertRaises(SystemExit):
+            with patch('sys.argv', ['prep.py', 'setup']):
+                prep.main()
+
+    def test_setup_in_api_commands(self):
+        """setup should be in the argparse choices."""
+        p = argparse.ArgumentParser()
+        p.add_argument("command", choices=["all","syllabus","content","add","setup","package","status","render","init"])
+        args = p.parse_args(["setup"])
+        self.assertEqual(args.command, "setup")
+
+    @patch('prep.get_client')
+    @patch('prep._confirm_cost', return_value=False)
+    def test_setup_bypasses_preflight(self, mock_confirm, mock_client):
+        """setup should NOT call _preflight_check (stubs are expected)."""
+        mock_client.return_value = MagicMock()
+        tmpdir = tempfile.mkdtemp()
+        saved = {}
+        _all_attrs = (
+            _ProfileTestMixin._PROFILE_DIR_ATTRS
+            + _ProfileTestMixin._PROFILE_CFG_ATTRS
+            + _ProfileTestMixin._PROFILE_COUNT_ATTRS
+        )
+        for attr in _all_attrs:
+            saved[attr] = getattr(prep, attr)
+        orig_base = prep.BASE_DIR
+        orig_adapted = prep._ADAPTED.copy()
+        try:
+            prep.BASE_DIR = Path(tmpdir)
+            # Create profile with STUB adapted files
+            profile_dir = Path(tmpdir) / "profiles" / "testsetup"
+            for sub in ["inputs/agendas", "inputs/episodes", "inputs/misc",
+                        "outputs/syllabus", "outputs/episodes", "outputs/gem",
+                        "outputs/notebooklm", "outputs/raw", "adapted"]:
+                (profile_dir / sub).mkdir(parents=True, exist_ok=True)
+            (profile_dir / "profile.md").write_text(
+                "---\nrole: Tester\ncompany: TestCo\ndomain: Testing\n---\n",
+                encoding="utf-8")
+            for fname in ["seeds.md", "coverage.md", "lenses.md", "gem-sections.md"]:
+                (profile_dir / "adapted" / fname).write_text(
+                    "<!-- STUB: placeholder -->\n", encoding="utf-8")
+
+            # This should NOT raise SystemExit from _preflight_check
+            # (it will be cancelled by _confirm_cost returning False)
+            with patch('sys.argv', ['prep.py', 'setup', '--profile', 'testsetup']):
+                prep.main()
+
+            # _confirm_cost was called (means we got past profile loading without preflight error)
+            mock_confirm.assert_called_once()
+        finally:
+            prep.BASE_DIR = orig_base
+            prep._ADAPTED = orig_adapted
+            for attr, val in saved.items():
+                setattr(prep, attr, val)
+            shutil.rmtree(tmpdir)
 
 
 if __name__ == "__main__":

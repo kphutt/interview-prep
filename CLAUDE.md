@@ -13,6 +13,7 @@ Interview prep content pipeline. Generates a technical deep-dive syllabus (confi
 - `prompts/syllabus.md` — Syllabus generation prompt (uses `.replace()`)
 - `prompts/content.md` — Content generation prompt (uses `.replace()`)
 - `prompts/distill.md` — Document distillation prompt (uses `.replace()`)
+- `prompts/setup.md` — Automated domain setup prompt (generates adapted files via API)
 - `prompts/intake.md` — Domain intake interview (generates adapted files, $0 cost)
 - `prompts/gem.md` — Gemini Gem system prompt (manual use, not processed by pipeline)
 - `prompts/notebooklm.md` — NotebookLM podcast prompt (manual use, not processed by pipeline)
@@ -35,6 +36,7 @@ System instructions (`_syllabus_instructions()`, `_content_instructions()`, `_di
 
 ```bash
 python3 prep.py init <profile-name>        # Create new profile skeleton
+python3 prep.py setup  --profile P        # Generate adapted/ files via API
 python3 prep.py all    --profile P        # Full pipeline
 python3 prep.py syllabus --profile P      # Generate agendas only
 python3 prep.py content --profile P [--episode N]  # Generate content

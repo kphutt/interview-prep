@@ -64,10 +64,11 @@ python3 prep.py status --profile security-infra
 # Create a profile for your domain
 python3 prep.py init my-domain
 
-# Generate your adapted content (required before running the pipeline):
-# Paste prompts/intake.md into any AI chat (ChatGPT, Claude, Gemini).
-# It will interview you about your role and domain, then generate adapted files.
-# Save them into profiles/my-domain/ (see "Adapting to a New Domain" below).
+# Generate domain-adapted content (choose one):
+# Option A — Automated (one command, uses OpenAI API):
+python3 prep.py setup --profile my-domain
+# Option B — Manual (free, uses any external AI chat):
+# Paste prompts/intake.md into ChatGPT/Claude/Gemini, save files to adapted/
 
 # Validate your profile is ready
 python3 prep.py status --profile my-domain
@@ -83,7 +84,7 @@ You don't have to spend anything to evaluate the pipeline. Start small and build
 **$0 — Browse and plan:**
 - Browse `profiles/security-infra/outputs/episodes/` to see output quality
 - Run `python3 prep.py status --profile security-infra` to see what a complete profile looks like
-- Paste `prompts/intake.md` into any AI chat to generate your domain files (no API cost)
+- Paste `prompts/intake.md` into any AI chat to generate your domain files (no API cost), or use `python3 prep.py setup --profile <name>` (~$2)
 
 **Pennies — Validate the pipeline end-to-end:**
 - The `smoketest` profile ships with 2 episodes + gpt-4o-mini:
@@ -138,6 +139,7 @@ All API commands (`all`, `syllabus`, `content`, `add`) require `--profile`.
 | Command | What it does |
 |---------|-------------|
 | `prep.py init <name>` | Create new profile skeleton with adapted/ stubs |
+| `prep.py setup --profile P` | Generate adapted/ files from profile.md via API |
 | `prep.py all --profile P` | Full pipeline: syllabus -> content -> package |
 | `prep.py syllabus --profile P` | Generate agendas only |
 | `prep.py content --profile P` | Generate content for existing agendas |
@@ -162,21 +164,19 @@ This creates `profiles/data-eng/` with a template `profile.md` and stub files in
 
 ### 2. Generate adapted content
 
-Paste `prompts/intake.md` into any AI chat (ChatGPT, Claude, Gemini). The intake is an interactive conversation — the AI will ask about your role, domain, and sub-areas, then generate all the files you need (`profile.md` + adapted files). Each output appears in a labeled code fence — copy the contents (not the fence markers) into the matching file.
+**Option A — Automated** (recommended):
 
-Cost: $0 — the intake runs in an external conversation, not through the pipeline.
+```bash
+python3 prep.py setup --profile data-eng
+```
 
-### 3. Save the generated files
+This calls the API once to generate all 4 adapted files from your `profile.md`. Cost: ~$2 with gpt-5.2-pro.
 
-Copy each generated file into your profile directory. The `profile.md` from intake replaces the template created by `init`:
+**Option B — Manual** (free):
 
-- `profiles/data-eng/profile.md`
-- `profiles/data-eng/adapted/seeds.md`
-- `profiles/data-eng/adapted/coverage.md`
-- `profiles/data-eng/adapted/lenses.md`
-- `profiles/data-eng/adapted/gem-sections.md`
+Paste `prompts/intake.md` into any AI chat (ChatGPT, Claude, Gemini). The intake is an interactive conversation — the AI will ask about your role, domain, and sub-areas, then generate all the files you need. Copy each output into the matching file under `profiles/data-eng/adapted/`.
 
-### 4. Validate your profile
+### 3. Validate your profile
 
 ```bash
 python3 prep.py status --profile data-eng
@@ -184,7 +184,7 @@ python3 prep.py status --profile data-eng
 
 Confirm the adapted files are loaded and markers are detected. Fix any issues before spending on API calls.
 
-### 5. Generate content
+### 4. Generate content
 
 ```bash
 # Test with a cheap model first
@@ -322,6 +322,7 @@ The `prompts/` directory includes:
 | `gem.md` | Gemini Gem coaching bot system prompt |
 | `notebooklm.md` | NotebookLM podcast generation prompt |
 | `notebooklm-frames.md` | Per-episode podcast frames |
+| `setup.md` | Automated domain setup (generates adapted files via API) |
 | `intake.md` | Domain intake interview (generates adapted files, $0 cost) |
 
 All prompts use `{PLACEHOLDER}` syntax. Role/company/domain vars are replaced first, then adapted domain content, then user content. This ordering prevents double-replacement when user content contains `{braces}`.
