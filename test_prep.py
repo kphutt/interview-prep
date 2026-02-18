@@ -2,6 +2,8 @@
 """Unit tests for prep.py"""
 
 import argparse
+import contextlib
+import io
 import os
 import shutil
 import sys
@@ -3544,6 +3546,33 @@ class TestSetupInMainFlow(unittest.TestCase):
             for attr, val in saved.items():
                 setattr(prep, attr, val)
             shutil.rmtree(tmpdir)
+
+
+class TestSyllabusReviewChecklist(unittest.TestCase):
+    """Verify review checklist prints after standalone syllabus generation."""
+
+    def test_checklist_contains_review_items(self):
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            prep._print_syllabus_review("my-domain")
+        out = buf.getvalue()
+        self.assertIn("Review before running content generation", out)
+        self.assertIn("No duplicate topics", out)
+        self.assertIn("Mental models are distinct", out)
+        self.assertIn(f"{len(prep.ALL_EPS)} episodes", out)
+        self.assertIn("python3 prep.py content --profile my-domain", out)
+        self.assertIn("python3 prep.py syllabus --profile my-domain --force", out)
+
+    def test_checklist_scales_with_episode_count(self):
+        orig = (prep._CORE_COUNT, prep._FRONTIER_COUNT)
+        try:
+            prep._reconfigure(6, 1)
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                prep._print_syllabus_review("test")
+            self.assertIn("7 episodes", buf.getvalue())
+        finally:
+            prep._reconfigure(*orig)
 
 
 if __name__ == "__main__":

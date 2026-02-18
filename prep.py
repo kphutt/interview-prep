@@ -768,6 +768,22 @@ def cmd_syllabus(client, force=False):
     print("\n=== SYLLABUS COMPLETE ===\n")
     return True
 
+
+def _print_syllabus_review(profile_name):
+    """Print review checklist after standalone syllabus generation."""
+    total = len(ALL_EPS)
+    print(f"Review before running content generation:")
+    print(f"")
+    print(f"  [ ] Episode count matches expectations ({total} episodes)")
+    print(f"  [ ] Topics cover JD requirements (cross-reference with adapted/coverage.md)")
+    print(f"  [ ] No duplicate topics across episodes")
+    print(f"  [ ] No obvious domain gaps")
+    print(f"  [ ] Frontier digests cover emerging/advanced topics")
+    print(f"  [ ] Mental models are distinct (not variations of the same idea)")
+    print(f"")
+    print(f"Satisfied? Run: python3 prep.py content --profile {profile_name}")
+    print(f"To regenerate: python3 prep.py syllabus --profile {profile_name} --force")
+
 def cmd_content(client, force=False, episode=None):
     print("\n=== CONTENT GENERATION ===\n")
     if force: print("  (--force: regenerating all)\n")
@@ -1371,7 +1387,10 @@ def main():
         return
 
     if args.command == "all":      cmd_all(client, force)
-    elif args.command == "syllabus": cmd_syllabus(client, force)
+    elif args.command == "syllabus":
+        ok = cmd_syllabus(client, force)
+        if ok:
+            _print_syllabus_review(args.profile)
     elif args.command == "content":  cmd_content(client, force, episode=args.episode)
     elif args.command == "add":
         if not args.file:

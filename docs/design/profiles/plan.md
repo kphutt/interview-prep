@@ -15,7 +15,7 @@ Cross-references: [brainstorm.md](brainstorm.md) | [decisions.md](decisions.md) 
 | 2 | Template unification + syllabus adaptation | Done |
 | 3 | Profile directory + config | Done |
 | 4 | Domain-agnostic prompts | Done |
-| 5 | Intake + meta-prompt | Partial (5.1 done, 5.2-5.3 superseded by `setup` command) |
+| 5 | Intake + meta-prompt | Done (5.2-5.3 superseded by `setup` command) |
 
 Side quests:
 - Smoke test: dry-run mode, test prompts, input/output display (done)
@@ -511,7 +511,7 @@ Specify `render` behavior incrementally:
 
 ---
 
-## Phase 5 — Intake + meta-prompt [PARTIAL — 5.1 done]
+## Phase 5 — Intake + meta-prompt [DONE — 5.2-5.3 superseded by `setup` command]
 
 **Goal:** An AI-guided interview produces a complete profile, and focused meta-prompt calls generate domain-specific adapted sections.
 
