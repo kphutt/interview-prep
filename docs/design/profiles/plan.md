@@ -14,7 +14,7 @@ Cross-references: [brainstorm.md](brainstorm.md) | [decisions.md](decisions.md) 
 | 1 | Dynamic episode counts | Done |
 | 2 | Template unification + syllabus adaptation | Done |
 | 3 | Profile directory + config | Done |
-| 4 | Domain-agnostic prompts | Done (4.4 deferred) |
+| 4 | Domain-agnostic prompts | Done |
 | 5 | Intake + meta-prompt | Partial (5.1 done, 5.2-5.3 superseded by `setup` command) |
 
 Side quests:
@@ -391,7 +391,7 @@ Move current `outputs/` to `profiles/security-infra/outputs/` using `git mv` for
 
 ---
 
-## Phase 4 — Domain-agnostic prompts [DONE — 4.4 deferred]
+## Phase 4 — Domain-agnostic prompts [DONE]
 
 **Goal:** Extract domain-specific content from prompts into injectable sections so new domains don't require editing prompt files.
 

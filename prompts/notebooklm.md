@@ -6,17 +6,29 @@
   The host descriptions below are written for Security & Infrastructure.
   Adapt Host 2's translation lens to your domain.
 
-  Workflow: for each episode, paste the matching frame from
-  notebooklm-frames.md into the EPISODE FRAME section below,
-  then use as the notebook instructions.
+  Format is inferred from episode content — no per-episode frames needed.
+  See notebooklm-frames.md for the original frames (retained as reference).
 -->
 
 # NotebookLM Podcast Prompt
 
-## EPISODE FRAME
-Format: [P0 incident postmortem / design review / migration war story / architecture debate / failure autopsy]
-Central argument: [One sentence — the core tension or trade-off]
-Stakes: [One sentence — what goes wrong if you get this wrong]
+## Episode Format
+
+Analyze the source document's Hook section and opening content to determine the narrative format. Match the first pattern that fits:
+
+| Signal in the content | Format | Pacing and energy |
+|----------------------|--------|-------------------|
+| An active or past incident drives the Hook — outage, breach, compromise, something is on fire | **P0 incident postmortem** | Urgent, ticking clock. Hosts react to unfolding constraints. |
+| A trade-off between two competing approaches — "do we go with X or Y?" | **Architecture debate** | Deliberative, back-and-forth. Hosts take sides and pressure-test each other. |
+| A rollout, transition, or migration — moving from old to new at scale | **Migration war story** | Sequential, constraint-by-constraint. Each step reveals the next obstacle. |
+| A breach or failure dissection — something failed, and we're figuring out why | **Failure autopsy** | Forensic, root-cause focused. Hosts peel back layers to find the real cause. |
+| A new proposal or standard under evaluation — "should we adopt this?" | **Design review** | Evaluative, trade-off analysis. Hosts weigh costs, risks, and alternatives. |
+
+Let the inferred format shape pacing and host energy throughout the episode — not just the topic, but how the hosts engage with each other.
+
+Derive the **central argument** from the Hook's core tension — the one question the episode keeps coming back to.
+
+Derive the **stakes** from the consequences described in the content — what goes wrong if you get this wrong.
 
 ---
 

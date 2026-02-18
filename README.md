@@ -253,12 +253,11 @@ Note: input must be UTF-8 text (not binary PDF).
 Each episode content document becomes a podcast source. For each episode:
 
 1. Create a new NotebookLM notebook
-2. Upload the episode content file from `outputs/episodes/` as a source
-3. Find the matching episode frame in `prompts/notebooklm-frames.md` and add it as another source
-4. Copy the prompt from `prompts/notebooklm.md` and use it as the generation instruction
-5. Generate the podcast
+2. Upload the episode content file from `profiles/<name>/outputs/episodes/` as a source
+3. Copy the prompt from `prompts/notebooklm.md` and use it as the generation instruction
+4. Generate the podcast
 
-> **Note:** The shipped `prompts/notebooklm-frames.md` contains episode frames specific to the Security & Infrastructure reference profile. Write your own frames when adapting to a new domain.
+The prompt infers the narrative format (postmortem, debate, war story, etc.) from the episode content — no per-episode frames needed.
 
 ### Gemini Gem Coaching Bot
 

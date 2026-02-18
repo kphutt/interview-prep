@@ -1,6 +1,6 @@
 # Decisions: Profiles
 
-1. **Smart NotebookLM prompt** — one prompt tells NotebookLM to pick the episode format (postmortem/debate/war story/etc.) from the content. No per-episode frames needed. Removes human from the loop.
+1. **Smart NotebookLM prompt** — one prompt tells NotebookLM to pick the episode format (postmortem/debate/war story/etc.) from the content. No per-episode frames needed. Removes human from the loop. **Shipped in Phase 4.4** — `notebooklm.md` now includes an Episode Format section with signal-to-format mapping; `notebooklm-frames.md` retained as reference but no longer required.
 
 2. **Bookshelf is optional** — the Gem works without it. Power users add it later when deep in prep. If `bookshelf.md` exists in profile, inject it into rendered Gem prompt. If not, skip it.
 
@@ -34,4 +34,4 @@
 
 17. **Per-episode syllabus regeneration deferred** — the batch sequence (scaffold → core batches → frontier → merge) generates episodes in groups of 4. Regenerating one episode means re-running its batch, which affects sibling episodes. Content `--episode N` is supported (each content episode is an independent API call). Revisit if users frequently need single-episode syllabus fixes.
 
-18. **Smart NotebookLM prompt requires validation** — decision #1 assumes a single smart prompt produces sufficient format variety (postmortem, debate, war story, etc.) without per-episode frames. Must validate with 3-5 existing episodes before Phase 4.4 eliminates frames. If validation fails, keep frames but make them domain-injectable.
+18. **Smart NotebookLM prompt requires validation** — decision #1 assumes a single smart prompt produces sufficient format variety (postmortem, debate, war story, etc.) without per-episode frames. Must validate with 3-5 existing episodes before Phase 4.4 eliminates frames. If validation fails, keep frames but make them domain-injectable. **Validated and shipped** — smart prompt written with explicit signal-to-format mapping table. Pending manual validation: generate 5 podcasts (episodes 1, 5, 8, 12, 15) and confirm at least 3 distinct narrative styles.

@@ -1,10 +1,13 @@
 <!-- Episode frames for NotebookLM podcast generation.
 
-  Workflow: paste one frame above the prompt in notebooklm.md, then generate.
-  Each frame seeds the episode's format, central argument, and stakes.
+  SUPERSEDED: The smart prompt in notebooklm.md now infers format from
+  episode content automatically — per-episode frames are no longer needed.
+
+  These frames are retained as a reference. If you want explicit control
+  over a specific episode's format, paste a frame into the Episode Format
+  section of notebooklm.md to override inference.
 
   These frames are written for Security & Infrastructure.
-  Write your own for other domains — the format template is in notebooklm.md.
 -->
 
 # Episode Frames for NotebookLM
