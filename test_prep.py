@@ -3575,5 +3575,116 @@ class TestSyllabusReviewChecklist(unittest.TestCase):
             prep._reconfigure(*orig)
 
 
+class TestDefensiveValidation(unittest.TestCase):
+    """Defensive validation hardening — edge cases that should error clearly."""
+
+    # --- 1. Empty profile field validation ---
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self._orig_base = prep.BASE_DIR
+        prep.BASE_DIR = Path(self.tmpdir)
+
+    def tearDown(self):
+        prep.BASE_DIR = self._orig_base
+        shutil.rmtree(self.tmpdir)
+
+    def _write_profile(self, name, content):
+        d = Path(self.tmpdir) / "profiles" / name
+        d.mkdir(parents=True, exist_ok=True)
+        (d / "profile.md").write_text(content, encoding="utf-8")
+
+    def test_blank_required_field_errors(self):
+        """Profile with 'role: \\n' (blank value) should exit with 'blank' message."""
+        self._write_profile("test", "---\nrole: \ncompany: Co\ndomain: D\n---\n")
+        buf = io.StringIO()
+        with self.assertRaises(SystemExit):
+            with contextlib.redirect_stdout(buf):
+                prep.load_profile("test")
+        self.assertIn("blank", buf.getvalue())
+        self.assertIn("role", buf.getvalue())
+
+    def test_blank_optional_field_still_skipped(self):
+        """Blank optional fields (like audience) should be silently skipped."""
+        self._write_profile("test", "---\nrole: SWE\ncompany: Co\ndomain: D\naudience: \n---\n")
+        cfg = prep.load_profile("test")
+        self.assertNotIn("audience", cfg)
+
+    # --- 2. cmd_content: missing agendas suggest syllabus ---
+
+    def test_all_missing_agendas_suggests_syllabus(self):
+        """When all episodes lack agendas, output should suggest running syllabus."""
+        tmpdir = tempfile.mkdtemp()
+        orig = {}
+        for attr in ['IN_AGENDAS', 'IN_EPISODES', 'SYLLABUS_DIR', 'EPISODES_DIR',
+                      'RAW_DIR', 'GEM_DIR', 'NLM_DIR']:
+            orig[attr] = getattr(prep, attr)
+            new_dir = Path(tmpdir) / attr.lower()
+            new_dir.mkdir(parents=True)
+            setattr(prep, attr, new_dir)
+
+        orig_all = prep.ALL_EPS
+        prep.ALL_EPS = [1, 2, 3]
+        try:
+            client = MagicMock()
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                prep.cmd_content(client, force=False)
+            output = buf.getvalue()
+            self.assertIn("syllabus", output)
+            self.assertIn("3 episode(s) had no agenda", output)
+            client.responses.create.assert_not_called()
+        finally:
+            prep.ALL_EPS = orig_all
+            for attr, val in orig.items():
+                setattr(prep, attr, val)
+            shutil.rmtree(tmpdir)
+
+    # --- 3. Profile name validation in cmd_init ---
+
+    def test_rejects_invalid_profile_names(self):
+        """Path traversal, spaces, slashes, dots, empty — all rejected."""
+        for bad_name in ["../etc", "my domain", "a/b", ".hidden", ""]:
+            with self.assertRaises(SystemExit, msg=f"Should reject: {bad_name!r}"):
+                prep.cmd_init(bad_name)
+
+    def test_accepts_valid_profile_names(self):
+        """Alphanumeric with hyphens and underscores should pass."""
+        for good_name in ["my-domain", "test_123", "A1"]:
+            prep.cmd_init(good_name)
+            self.assertTrue(
+                (Path(self.tmpdir) / "profiles" / good_name / "profile.md").exists(),
+                f"Should accept: {good_name!r}"
+            )
+
+    # --- 4. Binary file handling in cmd_add ---
+
+    def test_add_binary_file_errors(self):
+        """Binary file should return False and not call LLM."""
+        tmpdir = tempfile.mkdtemp()
+        orig = {}
+        for attr in ['SYLLABUS_DIR', 'EPISODES_DIR', 'GEM_DIR', 'NLM_DIR']:
+            orig[attr] = getattr(prep, attr)
+            new_dir = Path(tmpdir) / attr.lower()
+            new_dir.mkdir(parents=True)
+            setattr(prep, attr, new_dir)
+
+        try:
+            binfile = Path(tmpdir) / "fake.png"
+            binfile.write_bytes(b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR')
+
+            client = MagicMock()
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                result = prep.cmd_add(client, str(binfile))
+            self.assertFalse(result)
+            self.assertIn("not valid UTF-8", buf.getvalue())
+            client.responses.create.assert_not_called()
+        finally:
+            for attr, val in orig.items():
+                setattr(prep, attr, val)
+            shutil.rmtree(tmpdir)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -32,11 +32,6 @@ Done. `_MODEL_CAPS` now carries per-model allowed effort levels, `_clamp_effort(
 
 Mutable globals modified by `set_profile()` and `_reconfigure()` create implicit coupling. Tests save/restore these globals in setUp/tearDown. Refactor to a `PrepConfig` class passed explicitly to functions. Unblocks clean file splitting if codebase grows. Separate design initiative.
 
-## Defensive validation hardening
+## ~~Defensive validation hardening~~ ✅
 
-Several edge cases pass silently when they should error or warn:
-
-- **Empty profile field validation:** `role:` with no value passes YAML parsing but causes blank prompts
-- **cmd_content silent skip:** missing agendas cause silent episode skips; should suggest running `syllabus` first
-- **Profile name validation:** no check for spaces or special chars in profile names
-- **`add` command input format:** code only reads UTF-8 text; binary files (e.g., PDF) will fail silently or crash
+Done. Four guards added: blank required profile fields error with specific message, `cmd_content` suggests running syllabus when all agendas missing, `cmd_init` validates profile names against `^[a-zA-Z0-9][a-zA-Z0-9_-]*$`, and `cmd_add` catches `UnicodeDecodeError` on binary files.

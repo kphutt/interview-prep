@@ -290,6 +290,9 @@ def load_profile(name):
         key = key.strip().lower()
         value = value.strip().strip('"').strip("'")
         if not value:
+            if key in _PROFILE_REQUIRED_FIELDS:
+                print(f"ERROR: {profile_path.name} field '{key}' is blank — add a value.")
+                sys.exit(1)
             continue
 
         if key not in _PROFILE_KNOWN_FIELDS:
@@ -788,7 +791,7 @@ def cmd_content(client, force=False, episode=None):
     print("\n=== CONTENT GENERATION ===\n")
     if force: print("  (--force: regenerating all)\n")
     recover_agendas_from_raw()
-    gen = skip = 0
+    gen = skip = warn = 0
 
     eps_to_process = [episode] if episode is not None else ALL_EPS
     for ep in eps_to_process:
@@ -802,11 +805,11 @@ def cmd_content(client, force=False, episode=None):
 
         ag = find_agenda(ep)
         if not ag:
-            print(f"  warn ep {ep:02d} - no agenda"); continue
+            print(f"  warn ep {ep:02d} - no agenda"); warn += 1; continue
 
         agenda_text = ag.read_text(encoding="utf-8").strip()
         if not agenda_text:
-            print(f"  warn ep {ep:02d} - agenda file is empty ({ag})"); continue
+            print(f"  warn ep {ep:02d} - agenda file is empty ({ag})"); warn += 1; continue
 
         prompt = content_prompt(agenda_text)
         resp = call_llm(client, _content_instructions(), prompt, label=f"Episode {ep:02d}")
@@ -820,6 +823,9 @@ def cmd_content(client, force=False, episode=None):
         gen += 1
 
     print(f"\n=== CONTENT: {gen} generated, {skip} skipped ===\n")
+    if gen == 0 and warn > 0:
+        print(f"  WARNING: {warn} episode(s) had no agenda.")
+        print(f"  Run syllabus first: python3 prep.py syllabus --profile <name>\n")
     return True
 
 def cmd_package():
@@ -879,7 +885,13 @@ def cmd_add(client, filepath, slot=None):
     if not src.exists():
         print(f"ERROR: {filepath} not found"); return False
 
-    raw = src.read_text(encoding="utf-8")
+    try:
+        raw = src.read_text(encoding="utf-8")
+    except (UnicodeDecodeError, ValueError):
+        print(f"ERROR: {filepath} is not valid UTF-8 text.")
+        print(f"  The 'add' command requires text files (.md, .txt, .html).")
+        return False
+
     name = re.sub(r'[^a-zA-Z0-9_-]', '_', src.stem)[:50]
 
     # Step 1: Distill
@@ -1190,6 +1202,11 @@ def write_manifest():
 
 def cmd_init(name):
     """Create a new profile skeleton with template profile.md and adapted/ stubs."""
+    if not re.match(r'^[a-zA-Z0-9][a-zA-Z0-9_-]*$', name):
+        print(f"ERROR: Profile name must start with a letter/digit and contain only letters, digits, hyphens, underscores.")
+        print(f"  Got: {name}")
+        sys.exit(1)
+
     profile_dir = BASE_DIR / "profiles" / name
     if profile_dir.exists():
         print(f"ERROR: profile '{name}' already exists at {profile_dir}/")
