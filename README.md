@@ -14,7 +14,7 @@ The prompts are the crown jewels — they define episode structure, depth target
 
 The pipeline produces three outputs from your domain description:
 
-1. **Deep-dive study documents** — one episode per topic covering your domain end-to-end, each with Hook, Mental Model, L4 Trap (common wrong answers), Nitty Gritty (protocol/wire details), and Interviewer Probes sections
+1. **Deep-dive study documents** — one episode per topic covering your domain end-to-end, each with Title, Hook, Mental Model, L4 Trap (common wrong answers), Nitty Gritty (protocol/wire details), Staff Pivot, and Scenario Challenge sections
 2. **NotebookLM podcasts** — each episode becomes a podcast you can listen to during commutes
 3. **Gemini Gem coaching bot** — an interview coach with rapid-fire, mock interview, and explore modes
 
@@ -58,33 +58,29 @@ cp .env.example .env
 # Load config into your shell
 set -a && source .env && set +a
 
-# See what a complete profile looks like
-python3 prep.py status --profile security-infra
-
 # Create a profile for your domain
 python3 prep.py init my-domain
+# Edit profiles/my-domain/profile.md with your role, company, and domain
 
-# Generate domain-adapted content (choose one):
-# Option A — Automated (one command, uses OpenAI API):
+# Generate domain-adapted files (~$2 with gpt-5.2-pro)
 python3 prep.py setup --profile my-domain
-# Option B — Manual (free, uses any external AI chat):
-# Paste prompts/intake.md into ChatGPT/Claude/Gemini, save files to adapted/
 
 # Validate your profile is ready
 python3 prep.py status --profile my-domain
 
-# Generate everything (pipeline shows cost estimate before proceeding)
+# Generate everything (shows cost estimate before proceeding)
 python3 prep.py all --profile my-domain
 ```
+
+For a free alternative that skips the API for domain setup, see [Manual Alternative](#manual-alternative).
 
 ## Try It Before You Buy It
 
 You don't have to spend anything to evaluate the pipeline. Start small and build confidence:
 
-**$0 — Browse and plan:**
+**$0 — Browse the reference profile:**
 - Browse `profiles/security-infra/outputs/episodes/` to see output quality
 - Run `python3 prep.py status --profile security-infra` to see what a complete profile looks like
-- Paste `prompts/intake.md` into any AI chat to generate your domain files (no API cost), or use `python3 prep.py setup --profile <name>` (~$2)
 
 **Pennies — Validate the pipeline end-to-end:**
 - The `smoketest` profile ships with 2 episodes + gpt-4o-mini:
@@ -132,6 +128,17 @@ profiles/my-domain/
 
 The reference profile `profiles/security-infra/` ships with complete adapted files and generated content.
 
+### Adapted file format
+
+Adapted files use `<!-- MARKER_NAME -->` HTML comment delimiters to define sections. Each marker corresponds to a placeholder in the shared prompt templates. See `profiles/security-infra/adapted/` for a complete example.
+
+| File | Markers | Injected into |
+|------|---------|--------------|
+| `seeds.md` | `DOMAIN_SEEDS` | syllabus.md |
+| `coverage.md` | `COVERAGE_FRAMEWORK` | syllabus.md |
+| `lenses.md` | `DOMAIN_LENS`, `NITTY_GRITTY_LAYOUT`, `DOMAIN_REQUIREMENTS`, `DISTILL_REQUIREMENTS`, `STAKEHOLDERS` | content.md, distill.md |
+| `gem-sections.md` | `GEM_BOOKSHELF`, `GEM_EXAMPLES`, `GEM_CODING`, `GEM_FORMAT_EXAMPLES` | gem.md |
+
 ## Commands
 
 All API commands (`all`, `syllabus`, `content`, `add`) require `--profile`.
@@ -151,62 +158,6 @@ All API commands (`all`, `syllabus`, `content`, `add`) require `--profile`.
 | `prep.py status --profile P` | Show pipeline progress for a profile |
 
 Common flags: `--force` (regenerate existing), `--yes` (skip cost confirmation).
-
-## Adapting to a New Domain
-
-### 1. Create a profile
-
-```bash
-python3 prep.py init data-eng
-```
-
-This creates `profiles/data-eng/` with a template `profile.md` and stub files in `adapted/`.
-
-### 2. Generate adapted content
-
-**Option A — Automated** (recommended):
-
-```bash
-python3 prep.py setup --profile data-eng
-```
-
-This calls the API once to generate all 4 adapted files from your `profile.md`. Cost: ~$2 with gpt-5.2-pro.
-
-**Option B — Manual** (free):
-
-Paste `prompts/intake.md` into any AI chat (ChatGPT, Claude, Gemini). The intake is an interactive conversation — the AI will ask about your role, domain, and sub-areas, then generate all the files you need. Copy each output into the matching file under `profiles/data-eng/adapted/`.
-
-### 3. Validate your profile
-
-```bash
-python3 prep.py status --profile data-eng
-```
-
-Confirm the adapted files are loaded and markers are detected. Fix any issues before spending on API calls.
-
-### 4. Generate content
-
-```bash
-# Test with a cheap model first
-python3 prep.py syllabus --profile data-eng --yes
-
-# Review agendas in profiles/data-eng/outputs/syllabus/
-# If satisfied, generate full content:
-python3 prep.py all --profile data-eng
-```
-
-Note: `all` skips existing files, so running `syllabus` first then `all` is safe — it won't regenerate the agendas.
-
-### Adapted file format
-
-Adapted files use `<!-- MARKER_NAME -->` HTML comment delimiters to define sections. Each marker corresponds to a placeholder in the shared prompt templates. See `profiles/security-infra/adapted/` for a complete example.
-
-| File | Markers | Injected into |
-|------|---------|--------------|
-| `seeds.md` | `DOMAIN_SEEDS` | syllabus.md |
-| `coverage.md` | `COVERAGE_FRAMEWORK` | syllabus.md |
-| `lenses.md` | `DOMAIN_LENS`, `NITTY_GRITTY_LAYOUT`, `DOMAIN_REQUIREMENTS`, `DISTILL_REQUIREMENTS`, `STAKEHOLDERS` | content.md, distill.md |
-| `gem-sections.md` | `GEM_BOOKSHELF`, `GEM_EXAMPLES`, `GEM_CODING`, `GEM_FORMAT_EXAMPLES` | gem.md |
 
 ## Iterating
 
@@ -273,6 +224,19 @@ The pipeline shows a cost estimate before each run and asks for confirmation. Us
 
 Tip: test with `gpt-4o-mini` first to validate your adapted content, then regenerate with a stronger model.
 
+## Manual Alternative
+
+If you'd rather not use the API for domain setup, you can generate your adapted files for free using any AI chat:
+
+1. Run `python3 prep.py init my-domain` and edit `profiles/my-domain/profile.md`
+2. Paste `prompts/intake.md` into ChatGPT, Claude, or Gemini
+3. The intake is an interactive conversation — the AI will ask about your role, domain, and sub-areas, then generate all the files you need
+4. Copy each output into the matching file under `profiles/my-domain/adapted/`
+5. Run `python3 prep.py status --profile my-domain` to confirm markers are detected
+6. Continue with `python3 prep.py all --profile my-domain`
+
+This replaces the `prep.py setup` step in [Getting Started](#getting-started) — everything else in the pipeline works the same.
+
 ## Environment Variables
 
 | Variable | Default | Notes |
@@ -296,7 +260,7 @@ When using `--profile`, values in `profile.md` take precedence over env vars.
 | `python: command not found` | Use `python3` — macOS doesn't ship a `python` alias |
 | `ModuleNotFoundError: openai` | `pip3 install -r requirements.txt` |
 | `ERROR: OPENAI_API_KEY not set` | Edit `.env`, then `source .env` (bash/zsh). PowerShell: `$env:OPENAI_API_KEY="sk-..."`. Fish: `set -gx OPENAI_API_KEY sk-...` |
-| `ERROR: adapted/seeds.md is empty` | Run the intake prompt first — see [Adapting to a New Domain](#adapting-to-a-new-domain) |
+| `ERROR: adapted/seeds.md is empty` | Run `prep.py setup --profile <name>` or see [Manual Alternative](#manual-alternative) |
 | `ERROR: --profile required` | Add `--profile <name>` to the command |
 | API auth / rate / model error | Check your API key and model access tier; try `model: gpt-4o-mini` in profile.md |
 | Cost seems high | The pipeline shows an estimate before each run. Test with `gpt-4o-mini` first |
