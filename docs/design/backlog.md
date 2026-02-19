@@ -12,6 +12,14 @@ Certification prep (mapped to exam domains like CISSP, AWS SA) and curiosity-dri
 
 Run the intake interview locally (`prep.py intake --profile P`) instead of pasting into an external AI. Eliminates the biggest onboarding speed bump — the context switch to another tool mid-setup. The user already has an OpenAI key configured; use it.
 
+### Offline local models
+
+Support local LLMs (e.g. Ollama, llama.cpp) as an alternative to the OpenAI API. Removes the API key requirement and makes the tool free to run. Trade-off: output quality will likely be significantly worse — the prompts are tuned for frontier reasoning models, and local models may struggle with the structured multi-section format, domain depth, and long-context syllabus continuity. Worth testing but expectations should be low.
+
+### Smoketest `--force` in README
+
+The README snippet `python3 prep.py all --profile smoketest --yes` silently skips because outputs already exist. Needs `--force` or a note. Tiny fix, outsized first-impression impact.
+
 ## Tier 2 — Improve output quality
 
 ### Resume as input
@@ -22,11 +30,29 @@ Use the candidate's resume for baseline assessment and gap identification. Lets 
 
 The Gem interview coach reveals gaps during practice — topics where answers are weak or the syllabus didn't go deep enough. The existing workflow (done manually): identify gaps, generate targeted study content (like `gaps-brief.md`), feed it back into the bot via `prep.py add` so the coach has that knowledge too. This is a loop: generate, study, practice, identify gaps, generate more. The `add` command already handles distill-and-package; the missing pieces are structured gap identification from coaching sessions and a way to generate study content targeting specific weak areas.
 
+## Tier 2.5 — Operational robustness
+
+### Rate-limit aware retry
+
+`call_llm` retries at 2/4/8s for all errors. OpenAI `RateLimitError` (429) can require minutes. Should read `Retry-After` header or use longer backoff for 429s.
+
+### Partial failure exit codes
+
+`cmd_content` returns `True` even when episodes fail. A 12/15 run looks identical to 15/15. Should surface the failure count and return a clear warning or non-zero exit.
+
 ## Tier 3 — Contributor/maintainer experience
 
 ### Globals refactor / PrepConfig class
 
 Mutable globals modified by `set_profile()` and `_reconfigure()` create implicit coupling. Tests save/restore these globals in setUp/tearDown. Refactor to a `PrepConfig` class passed explicitly to functions. Unblocks clean file splitting if codebase grows. Separate design initiative.
+
+### CONTRIBUTING.md
+
+No guide for contributors. Should cover: running tests, the global-save/restore pattern, why `.replace()` not `.format()`, profile system architecture.
+
+### Remove `prep-backup.py`
+
+A 603-line pre-refactor copy is committed. `.gitignore` blocks new backups but this one is already tracked. Confusing to anyone who clones.
 
 ## Tier 4 — Speculative / advanced
 
