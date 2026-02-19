@@ -564,7 +564,7 @@ The interview prompt. Must be a showcase piece — conversational, thorough, and
 
 **Superseded:** Implemented as `cmd_setup(name)` instead — a single API call that generates all four adapted files at once. See `prompts/setup.md`.
 
-#### 5.4: End-to-end workflow
+#### 5.4: End-to-end workflow [DONE — see `docs/design/workflow.md`]
 
 Every command the user runs, in order:
 
