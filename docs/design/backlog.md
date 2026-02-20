@@ -4,6 +4,30 @@ Prioritized by what helps new users get started and get value fastest.
 
 ## Tier 1 — Reduce first-run friction
 
+### Better profile.md template and init output
+
+The `init` template body says "Add any extra context here" — doesn't mention job descriptions or explain that the body directly feeds `setup` and significantly improves output quality. Two changes: (1) rename the template section to "Job Description & Context" with a clear prompt to paste the JD, (2) update `cmd_init` output to explicitly tell users to paste the JD and why it matters.
+
+### `all` auto-runs setup
+
+If adapted files are stubs when `all` runs, it should run `setup` automatically instead of erroring via `_preflight_check`. Collapses the new user flow from `init` → edit profile → `setup` → `all` down to `init` → edit profile → `all`. One less command to know about.
+
+### `prep.py clean --profile P`
+
+No way to reset generated outputs without `rm -rf profiles/P/outputs/`, which risks deleting adapted files by accident. A `clean` command that only removes generated outputs (syllabus, episodes, gem, notebooklm, raw) would be safer.
+
+### Progress during API calls
+
+`call_llm` can take 30-90 seconds per call with no output. A simple elapsed timer or "waiting..." indicator would reassure users the pipeline isn't hung.
+
+### Post-run cost summary
+
+There's a cost confirmation before runs but no summary after. Printing "This run used ~N calls (~$X estimated)" at the end helps users budget, especially on first runs.
+
+### `status` surfaces validate issues
+
+`status --profile P` and `validate` are separate commands. If `status` also flagged config issues (missing API key, stub adapted files) inline, users wouldn't need to discover `validate` exists.
+
 ### Expanded use cases
 
 Certification prep (mapped to exam domains like CISSP, AWS SA) and curiosity-driven learning (topic interest, no deadline). The architecture should handle these eventually, but profiles ships with job interview support first. Even lightweight prompt variants per use case would broaden who can use the tool without architectural changes.
@@ -45,10 +69,6 @@ Mutable globals modified by `set_profile()` and `_reconfigure()` create implicit
 ### CONTRIBUTING.md
 
 No guide for contributors. Should cover: running tests, the global-save/restore pattern, why `.replace()` not `.format()`, profile system architecture.
-
-### Remove `prep-backup.py`
-
-A 603-line pre-refactor copy is committed. `.gitignore` blocks new backups but this one is already tracked. Confusing to anyone who clones.
 
 ## Tier 4 — Speculative / advanced
 
