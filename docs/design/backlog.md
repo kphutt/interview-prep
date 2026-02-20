@@ -20,10 +20,6 @@ Support local LLMs (e.g. Ollama, llama.cpp) as an alternative to the OpenAI API.
 
 The biggest time sink in the workflow is creating 15 individual NotebookLM notebooks (30-45 min of repetitive clicking). Document a streamlined workflow or provide a helper script that generates per-episode instructions with pre-extracted prompts from `notebooklm-frames.md`. Cannot fully automate (no NotebookLM API) but can reduce friction significantly.
 
-### Smoketest `--force` in README
-
-The README snippet `python3 prep.py all --profile smoketest --yes` silently skips because outputs already exist. Needs `--force` or a note. Tiny fix, outsized first-impression impact.
-
 ## Tier 2 — Improve output quality
 
 ### Resume as input
@@ -85,3 +81,7 @@ Done. Audit document at [docs/design/friction-audit.md](friction-audit.md) catal
 ### ~~`prep.py validate` command~~ ✅
 
 Done. `cmd_validate()` checks API key, profile fields, adapted file markers, and prompt files — reports all issues at once (not exit-on-first-error like `_preflight_check`). Exits 0/1. Five tests in `TestCmdValidate`.
+
+### ~~Smoketest `--force` in README~~ ✅
+
+Done. `cmd_all` detects a fully-complete pipeline and tells the user to re-run with `--force` instead of silently skipping. README snippet updated with `# add --force to re-run` comment.

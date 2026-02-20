@@ -1362,6 +1362,16 @@ def cmd_all(client, force=False):
     print("  FULL PIPELINE")
     print("="*60 + "\n")
 
+    # Detect already-complete pipeline
+    if not force:
+        agendas = sum(1 for ep in ALL_EPS if find_agenda(ep))
+        contents = sum(1 for ep in ALL_EPS if find_content(ep))
+        total = len(ALL_EPS)
+        if agendas == total and contents == total:
+            print("  Pipeline already complete — all agendas and content exist.")
+            print("  To regenerate, run again with --force.\n")
+            return
+
     ok = cmd_syllabus(client, force)
     if not ok:
         print("\n  WARNING: Syllabus had failures. Content will skip missing agendas.\n")

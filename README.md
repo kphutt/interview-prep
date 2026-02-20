@@ -44,7 +44,7 @@ ls profiles/security-infra/outputs/episodes/
 ```bash
 pip3 install -r requirements.txt
 export OPENAI_API_KEY=sk-...    # get one at platform.openai.com
-python3 prep.py all --profile smoketest --yes
+python3 prep.py all --profile smoketest --yes    # add --force to re-run
 ```
 
 ### Build your own profile

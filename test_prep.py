@@ -751,6 +751,60 @@ class TestCmdAllFailureHandling(unittest.TestCase):
         self.assertIn("WARNING: Syllabus had failures", output)
 
 
+class TestCmdAllAlreadyComplete(unittest.TestCase):
+    """Test that cmd_all short-circuits when pipeline is already complete."""
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self._orig = {}
+        for attr in ['IN_AGENDAS', 'IN_EPISODES', 'SYLLABUS_DIR', 'EPISODES_DIR',
+                      'RAW_DIR', 'GEM_DIR', 'NLM_DIR']:
+            self._orig[attr] = getattr(prep, attr)
+            new_dir = Path(self.tmpdir) / attr.lower()
+            new_dir.mkdir(parents=True)
+            setattr(prep, attr, new_dir)
+
+    def tearDown(self):
+        shutil.rmtree(self.tmpdir)
+        for attr, val in self._orig.items():
+            setattr(prep, attr, val)
+
+    def test_skips_when_complete(self):
+        """cmd_all should print message and return without API calls when all outputs exist."""
+        for ep in prep.ALL_EPS:
+            (prep.SYLLABUS_DIR / prep.ep_file(ep, "agenda")).write_text("agenda", encoding="utf-8")
+            (prep.EPISODES_DIR / prep.ep_file(ep, "content")).write_text("x" * 500, encoding="utf-8")
+
+        client = MagicMock()
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            prep.cmd_all(client)
+        output = buf.getvalue()
+        self.assertIn("already complete", output)
+        self.assertIn("--force", output)
+        client.responses.create.assert_not_called()
+
+    def test_runs_when_incomplete(self):
+        """cmd_all should proceed normally when outputs are missing."""
+        client = MagicMock()
+        client.responses.create.return_value = MagicMock(
+            status="failed", error="test"
+        )
+        orig_runs = prep.SYLLABUS_RUNS
+        prep.SYLLABUS_RUNS = [dict(mode="SCAFFOLD", core="", frontier="")]
+        buf = io.StringIO()
+        try:
+            with contextlib.redirect_stdout(buf):
+                with patch('prep.time') as mock_time:
+                    mock_time.sleep = MagicMock()
+                    mock_time.time = MagicMock(return_value=0)
+                    prep.cmd_all(client)
+        finally:
+            prep.SYLLABUS_RUNS = orig_runs
+        output = buf.getvalue()
+        self.assertNotIn("already complete", output)
+
+
 class TestRecoverFromRaw(unittest.TestCase):
     """Test recovery of agendas from raw syllabus files."""
 
