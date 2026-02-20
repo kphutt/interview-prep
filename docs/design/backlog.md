@@ -4,9 +4,9 @@ Prioritized by what helps new users get started and get value fastest.
 
 ## Tier 1 — Reduce first-run friction
 
-### Friction and manual-step audit
+### `prep.py validate` command
 
-Walk through the full workflow end-to-end (clone → init → setup → syllabus → content → package → use in NotebookLM/Gem) and catalog every manual step, context switch, or point where a user could get stuck. Findings should reprioritize the rest of this backlog — fix what actually hurts before guessing. Pair this with an end-to-end smoke test that exercises as much of the pipeline as possible (mocked API calls are fine) so regressions in the happy path get caught automatically.
+Add a `validate` subcommand that checks env vars, profile fields, and adapted file markers before any API calls. Catches misconfigurations early (blank fields, missing API key, malformed markers) instead of failing mid-pipeline. Highest-impact friction reduction from the [friction audit](friction-audit.md).
 
 ### Expanded use cases
 
@@ -19,6 +19,10 @@ Run the intake interview locally (`prep.py intake --profile P`) instead of pasti
 ### Offline local models
 
 Support local LLMs (e.g. Ollama, llama.cpp) as an alternative to the OpenAI API. Removes the API key requirement and makes the tool free to run. Trade-off: output quality will likely be significantly worse — the prompts are tuned for frontier reasoning models, and local models may struggle with the structured multi-section format, domain depth, and long-context syllabus continuity. Worth testing but expectations should be low.
+
+### NotebookLM batch setup documentation
+
+The biggest time sink in the workflow is creating 15 individual NotebookLM notebooks (30-45 min of repetitive clicking). Document a streamlined workflow or provide a helper script that generates per-episode instructions with pre-extracted prompts from `notebooklm-frames.md`. Cannot fully automate (no NotebookLM API) but can reduce friction significantly.
 
 ### Smoketest `--force` in README
 
@@ -77,3 +81,7 @@ Done. `_MODEL_CAPS` now carries per-model allowed effort levels, `_clamp_effort(
 ### ~~Defensive validation hardening~~ ✅
 
 Done. Four guards added: blank required profile fields error with specific message, `cmd_content` suggests running syllabus when all agendas missing, `cmd_init` validates profile names against `^[a-zA-Z0-9][a-zA-Z0-9_-]*$`, and `cmd_add` catches `UnicodeDecodeError` on binary files.
+
+### ~~Friction and manual-step audit~~ ✅
+
+Done. Audit document at [docs/design/friction-audit.md](friction-audit.md) catalogs 19 friction points across 10 pipeline steps (3 High, 7 Medium, 9 Low). E2E smoke test (`TestFullPipelineSmoke`) exercises init → setup → syllabus → content → package → status → render with mocked API calls. Findings added to backlog: `validate` command, NotebookLM batch setup docs.

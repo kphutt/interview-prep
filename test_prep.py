@@ -3686,5 +3686,179 @@ class TestDefensiveValidation(unittest.TestCase):
             shutil.rmtree(tmpdir)
 
 
+class TestFullPipelineSmoke(_ProfileTestMixin, unittest.TestCase):
+    """End-to-end smoke test: init -> setup -> syllabus -> content -> package -> status -> render.
+
+    Exercises the full happy path with 2 core + 1 frontier episode using
+    mocked call_llm responses.  Verifies outputs exist at each stage.
+    """
+
+    _SETUP_RESPONSE = (
+        "=== FILE: seeds.md ===\n"
+        "<!-- DOMAIN_SEEDS -->\nSeed topics for test domain.\n\n"
+        "=== FILE: coverage.md ===\n"
+        "<!-- COVERAGE_FRAMEWORK -->\nCoverage framework for test domain.\n\n"
+        "=== FILE: lenses.md ===\n"
+        "<!-- DOMAIN_LENS -->\nTest lens content.\n\n"
+        "<!-- NITTY_GRITTY_LAYOUT -->\n1) **Test Details**\n\n"
+        "<!-- DOMAIN_REQUIREMENTS -->\n- Test domain requirements.\n\n"
+        "<!-- DISTILL_REQUIREMENTS -->\n- Test distill requirements.\n\n"
+        "<!-- STAKEHOLDERS -->\nEngineering, Product, Security\n\n"
+        "=== FILE: gem-sections.md ===\n"
+        "<!-- GEM_BOOKSHELF -->\nTest bookshelf references.\n\n"
+        "<!-- GEM_EXAMPLES -->\n> Test example question.\n\n"
+        "<!-- GEM_CODING -->\nTest coding section.\n\n"
+        "<!-- GEM_FORMAT_EXAMPLES -->\nFeb 10|Test|Topic|Concept|Owned|Detail|Locked"
+    )
+
+    _CORE_BATCH_RESPONSE = (
+        "## Episode 1: Test Topic Alpha\n"
+        "Hook for episode 1.\n"
+        "Detailed agenda content for episode 1.\n\n"
+        "## Episode 2: Test Topic Beta\n"
+        "Hook for episode 2.\n"
+        "Detailed agenda content for episode 2.\n"
+    )
+
+    _FRONTIER_RESPONSE = (
+        "## Frontier Digest A: Emerging Test Trends\n"
+        "Frontier content for digest A.\n"
+        "Detailed frontier analysis and emerging topics.\n"
+    )
+
+    _CONTENT_RESPONSE = (
+        "# Technical Deep Dive\n\n"
+        "## Section 1: Core Concepts\n\n"
+        + ("This is detailed technical content for the episode. " * 30) + "\n\n"
+        "## Section 2: Deep Analysis\n\n"
+        + ("Advanced analysis and architectural patterns discussed in depth. " * 20) + "\n"
+    )
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self._save_profile_state()
+        self._orig_base = prep.BASE_DIR
+        prep.BASE_DIR = Path(self.tmpdir)
+
+    def tearDown(self):
+        prep.BASE_DIR = self._orig_base
+        self._restore_profile_state()
+        shutil.rmtree(self.tmpdir)
+
+    def _mock_call_llm(self, client, instructions, user_input, label="", retries=3):
+        """Route mock responses by label."""
+        if "Setup" in label:
+            return self._SETUP_RESPONSE
+        if "SCAFFOLD" in label:
+            return "Scaffold overview for the test domain."
+        if "CORE_BATCH" in label:
+            return self._CORE_BATCH_RESPONSE
+        if "FRONTIER_DIGEST" in label:
+            return self._FRONTIER_RESPONSE
+        if "FINAL_MERGE" in label:
+            return "Final merged syllabus for the test domain."
+        if label.startswith("Episode"):
+            return self._CONTENT_RESPONSE
+        return "Mock response"
+
+    @patch('prep.call_llm')
+    def test_full_pipeline(self, mock_llm):
+        """The full happy path: init through render, zero real API calls."""
+        mock_llm.side_effect = self._mock_call_llm
+        client = MagicMock()
+        profile_name = "smoketest"
+
+        # --- 1. init ---
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            prep.cmd_init(profile_name)
+        profile_dir = Path(self.tmpdir) / "profiles" / profile_name
+        self.assertTrue(profile_dir.exists())
+        self.assertTrue((profile_dir / "profile.md").exists())
+
+        # --- 2. fill in profile.md ---
+        (profile_dir / "profile.md").write_text(
+            "---\n"
+            "role: Test Engineer\n"
+            "company: TestCo\n"
+            "domain: Test Engineering\n"
+            "audience: Senior Engineers\n"
+            "core_episodes: 2\n"
+            "frontier_episodes: 1\n"
+            "---\n",
+            encoding="utf-8",
+        )
+
+        # --- 3. load profile ---
+        prep.set_profile(profile_name)
+        prep.ensure_dirs()
+        self.assertEqual(prep._CORE_COUNT, 2)
+        self.assertEqual(prep._FRONTIER_COUNT, 1)
+        self.assertEqual(len(prep.ALL_EPS), 3)
+
+        # --- 4. setup ---
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            result = prep.cmd_setup(client, profile_name)
+        self.assertTrue(result, f"cmd_setup failed:\n{buf.getvalue()}")
+
+        adapted_dir = profile_dir / "adapted"
+        for fname in ["seeds.md", "coverage.md", "lenses.md", "gem-sections.md"]:
+            self.assertTrue((adapted_dir / fname).exists(), f"{fname} not written")
+            self.assertFalse(prep._is_stub(adapted_dir / fname), f"{fname} still a stub")
+            sections = prep._parse_adapted_sections(
+                (adapted_dir / fname).read_text(encoding="utf-8")
+            )
+            self.assertGreater(len(sections), 0, f"{fname} has no marker sections")
+
+        # --- 5. syllabus (4 runs: scaffold, core_batch, frontier_digest, final_merge) ---
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            result = prep.cmd_syllabus(client)
+        self.assertTrue(result, f"cmd_syllabus failed:\n{buf.getvalue()}")
+
+        for ep in prep.ALL_EPS:
+            self.assertIsNotNone(prep.find_agenda(ep), f"Agenda missing for ep {ep}")
+
+        # --- 6. content (3 episodes) ---
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            result = prep.cmd_content(client)
+        self.assertTrue(result, f"cmd_content failed:\n{buf.getvalue()}")
+
+        for ep in prep.ALL_EPS:
+            self.assertIsNotNone(prep.find_content(ep), f"Content missing for ep {ep}")
+
+        # --- 7. package ---
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            result = prep.cmd_package()
+        self.assertTrue(result, f"cmd_package failed:\n{buf.getvalue()}")
+
+        # gem-1.md (core eps 1-2), gem-2.md (frontier ep 3)
+        self.assertTrue((prep.GEM_DIR / "gem-1.md").exists(), "gem-1.md missing")
+        self.assertTrue((prep.GEM_DIR / "gem-2.md").exists(), "gem-2.md missing")
+
+        nlm_files = list(prep.NLM_DIR.glob("*.md"))
+        self.assertEqual(len(nlm_files), 3,
+            f"Expected 3 NotebookLM files, got {len(nlm_files)}")
+
+        # --- 8. status ---
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            prep.cmd_status(profile_name=profile_name)
+        self.assertIn("TestCo", buf.getvalue())
+
+        # --- 9. render ---
+        rendered = prep.render_template("Role: {PREP_ROLE}, Company: {PREP_COMPANY}")
+        self.assertIn("Test Engineer", rendered)
+        self.assertIn("TestCo", rendered)
+        self.assertNotIn("{PREP_ROLE}", rendered)
+
+        # Total: 1 setup + 4 syllabus + 3 content = 8 calls
+        self.assertEqual(mock_llm.call_count, 8,
+            f"Expected 8 call_llm calls, got {mock_llm.call_count}")
+
+
 if __name__ == "__main__":
     unittest.main()
