@@ -4,6 +4,10 @@ Prioritized by what helps new users get started and get value fastest.
 
 ## Tier 1 — Reduce first-run friction
 
+### Friction and manual-step audit
+
+Walk through the full workflow end-to-end (clone → init → setup → syllabus → content → package → use in NotebookLM/Gem) and catalog every manual step, context switch, or point where a user could get stuck. Findings should reprioritize the rest of this backlog — fix what actually hurts before guessing. Pair this with an end-to-end smoke test that exercises as much of the pipeline as possible (mocked API calls are fine) so regressions in the happy path get caught automatically.
+
 ### Expanded use cases
 
 Certification prep (mapped to exam domains like CISSP, AWS SA) and curiosity-driven learning (topic interest, no deadline). The architecture should handle these eventually, but profiles ships with job interview support first. Even lightweight prompt variants per use case would broaden who can use the tool without architectural changes.
