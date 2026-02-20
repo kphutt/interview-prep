@@ -4,10 +4,6 @@ Prioritized by what helps new users get started and get value fastest.
 
 ## Tier 1 — Reduce first-run friction
 
-### `prep.py validate` command
-
-Add a `validate` subcommand that checks env vars, profile fields, and adapted file markers before any API calls. Catches misconfigurations early (blank fields, missing API key, malformed markers) instead of failing mid-pipeline. Highest-impact friction reduction from the [friction audit](friction-audit.md).
-
 ### Expanded use cases
 
 Certification prep (mapped to exam domains like CISSP, AWS SA) and curiosity-driven learning (topic interest, no deadline). The architecture should handle these eventually, but profiles ships with job interview support first. Even lightweight prompt variants per use case would broaden who can use the tool without architectural changes.
@@ -85,3 +81,7 @@ Done. Four guards added: blank required profile fields error with specific messa
 ### ~~Friction and manual-step audit~~ ✅
 
 Done. Audit document at [docs/design/friction-audit.md](friction-audit.md) catalogs 19 friction points across 10 pipeline steps (3 High, 7 Medium, 9 Low). E2E smoke test (`TestFullPipelineSmoke`) exercises init → setup → syllabus → content → package → status → render with mocked API calls. Findings added to backlog: `validate` command, NotebookLM batch setup docs.
+
+### ~~`prep.py validate` command~~ ✅
+
+Done. `cmd_validate()` checks API key, profile fields, adapted file markers, and prompt files — reports all issues at once (not exit-on-first-error like `_preflight_check`). Exits 0/1. Five tests in `TestCmdValidate`.
