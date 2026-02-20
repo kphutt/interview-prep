@@ -11,4 +11,5 @@ venv/
 *-backup.py
 all-content-old.md
 outputs/
+!profiles/security-infra/outputs/
 **/outputs/manifest.txt
