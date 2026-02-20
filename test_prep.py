@@ -3686,6 +3686,144 @@ class TestDefensiveValidation(unittest.TestCase):
             shutil.rmtree(tmpdir)
 
 
+class TestCmdValidate(_ProfileTestMixin, unittest.TestCase):
+    """Test cmd_validate comprehensive pre-pipeline checks."""
+
+    _VALID_ADAPTED = {
+        "seeds.md": "<!-- DOMAIN_SEEDS -->\nReal seed content",
+        "coverage.md": "<!-- COVERAGE_FRAMEWORK -->\nReal coverage",
+        "lenses.md": (
+            "<!-- DOMAIN_LENS -->\nLens\n\n"
+            "<!-- NITTY_GRITTY_LAYOUT -->\n1) Details\n\n"
+            "<!-- DOMAIN_REQUIREMENTS -->\n- Req\n\n"
+            "<!-- DISTILL_REQUIREMENTS -->\n- Distill\n\n"
+            "<!-- STAKEHOLDERS -->\nEng, Product"
+        ),
+        "gem-sections.md": (
+            "<!-- GEM_BOOKSHELF -->\nBooks\n\n"
+            "<!-- GEM_EXAMPLES -->\nExamples\n\n"
+            "<!-- GEM_CODING -->\nCoding\n\n"
+            "<!-- GEM_FORMAT_EXAMPLES -->\nFormats"
+        ),
+    }
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self._save_profile_state()
+        self._orig_base = prep.BASE_DIR
+        prep.BASE_DIR = Path(self.tmpdir)
+        self._orig_api_key = os.environ.get("OPENAI_API_KEY")
+
+    def tearDown(self):
+        prep.BASE_DIR = self._orig_base
+        self._restore_profile_state()
+        if self._orig_api_key is not None:
+            os.environ["OPENAI_API_KEY"] = self._orig_api_key
+        elif "OPENAI_API_KEY" in os.environ:
+            del os.environ["OPENAI_API_KEY"]
+        shutil.rmtree(self.tmpdir)
+
+    def _setup_valid_profile(self, name="testval"):
+        self._write_profile(name, "---\nrole: Test Engineer\ncompany: TestCo\ndomain: Test Engineering\n---\n")
+        self._write_adapted(name, self._VALID_ADAPTED)
+        prep.set_profile(name)
+        return name
+
+    def test_passes_with_valid_profile(self):
+        """All checks green when profile, adapted files, and API key are valid."""
+        os.environ["OPENAI_API_KEY"] = "sk-test-key"
+        name = self._setup_valid_profile()
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            result = prep.cmd_validate(name)
+        self.assertTrue(result)
+        self.assertIn("all checks passed", buf.getvalue())
+        self.assertNotIn("[ ]", buf.getvalue())
+
+    def test_catches_missing_api_key(self):
+        """Missing OPENAI_API_KEY is reported."""
+        if "OPENAI_API_KEY" in os.environ:
+            del os.environ["OPENAI_API_KEY"]
+        name = self._setup_valid_profile()
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            result = prep.cmd_validate(name)
+        self.assertFalse(result)
+        self.assertIn("API key", buf.getvalue())
+        self.assertIn("1 issue found", buf.getvalue())
+
+    def test_catches_stub_adapted(self):
+        """Stub adapted files are reported."""
+        os.environ["OPENAI_API_KEY"] = "sk-test-key"
+        name = "stubbed"
+        self._write_profile(name, "---\nrole: R\ncompany: C\ndomain: D\n---\n")
+        self._write_adapted(name, {
+            "seeds.md": "<!-- STUB: placeholder -->\n",
+            "coverage.md": "<!-- STUB: placeholder -->\n",
+            "lenses.md": "<!-- STUB: placeholder -->\n",
+            "gem-sections.md": "<!-- STUB: placeholder -->\n",
+        })
+        prep.set_profile(name)
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            result = prep.cmd_validate(name)
+        self.assertFalse(result)
+        output = buf.getvalue()
+        self.assertIn("adapted/seeds.md", output)
+        self.assertIn("adapted/coverage.md", output)
+        self.assertIn("adapted/lenses.md", output)
+        self.assertIn("adapted/gem-sections.md", output)
+
+    def test_catches_missing_markers(self):
+        """Adapted file with content but missing expected marker is reported."""
+        os.environ["OPENAI_API_KEY"] = "sk-test-key"
+        name = "partial"
+        adapted = dict(self._VALID_ADAPTED)
+        # lenses.md missing STAKEHOLDERS
+        adapted["lenses.md"] = (
+            "<!-- DOMAIN_LENS -->\nLens\n\n"
+            "<!-- NITTY_GRITTY_LAYOUT -->\n1) Details\n\n"
+            "<!-- DOMAIN_REQUIREMENTS -->\n- Req\n\n"
+            "<!-- DISTILL_REQUIREMENTS -->\n- Distill"
+        )
+        self._write_profile(name, "---\nrole: R\ncompany: C\ndomain: D\n---\n")
+        self._write_adapted(name, adapted)
+        prep.set_profile(name)
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            result = prep.cmd_validate(name)
+        self.assertFalse(result)
+        output = buf.getvalue()
+        self.assertIn("STAKEHOLDERS", output)
+        self.assertIn("1 issue found", output)
+
+    def test_reports_all_issues(self):
+        """Multiple problems are all reported (not just the first)."""
+        if "OPENAI_API_KEY" in os.environ:
+            del os.environ["OPENAI_API_KEY"]
+        name = "multi"
+        self._write_profile(name, "---\nrole: R\ncompany: C\ndomain: D\n---\n")
+        self._write_adapted(name, {
+            "seeds.md": "<!-- STUB: placeholder -->\n",
+            "coverage.md": "<!-- COVERAGE_FRAMEWORK -->\nReal",
+            "lenses.md": "<!-- DOMAIN_LENS -->\nOnly one marker",
+            "gem-sections.md": "<!-- GEM_BOOKSHELF -->\nBooks",
+        })
+        prep.set_profile(name)
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            result = prep.cmd_validate(name)
+        self.assertFalse(result)
+        output = buf.getvalue()
+        # API key + seeds.md stub + lenses.md missing markers + gem-sections.md missing markers
+        self.assertIn("API key", output)
+        self.assertIn("adapted/seeds.md", output)
+        self.assertIn("STAKEHOLDERS", output)
+        # Count [ ] occurrences — should be more than 1
+        fail_count = output.count("[ ]")
+        self.assertGreaterEqual(fail_count, 3)
+
+
 class TestFullPipelineSmoke(_ProfileTestMixin, unittest.TestCase):
     """End-to-end smoke test: init -> setup -> syllabus -> content -> package -> status -> render.
 

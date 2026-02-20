@@ -13,6 +13,7 @@ Usage:
     python prep.py add <file> --profile P [--gem-slot N]  # Distill doc -> content -> package
     python prep.py package [--profile P]                  # Repackage outputs
     python prep.py render <file> [--profile P]            # Substitute env vars, print to stdout
+    python prep.py validate --profile P                    # Check profile + env readiness
     python prep.py status  [--profile P]                  # Show what exists
 
 Setup:
@@ -158,6 +159,15 @@ _ADAPTED = {}  # marker -> content, populated by set_profile()
 
 # Stub comment prefix — files starting with this are considered empty stubs
 _ADAPTED_STUB_PREFIX = "<!-- STUB:"
+
+_ADAPTED_EXPECTED_MARKERS = {
+    "seeds.md": ["DOMAIN_SEEDS"],
+    "coverage.md": ["COVERAGE_FRAMEWORK"],
+    "lenses.md": ["DOMAIN_LENS", "NITTY_GRITTY_LAYOUT", "DOMAIN_REQUIREMENTS",
+                   "DISTILL_REQUIREMENTS", "STAKEHOLDERS"],
+    "gem-sections.md": ["GEM_BOOKSHELF", "GEM_EXAMPLES", "GEM_CODING",
+                        "GEM_FORMAT_EXAMPLES"],
+}
 
 def _parse_adapted_sections(text):
     """Parse <!-- MARKER --> delimited sections from adapted file content."""
@@ -1094,6 +1104,62 @@ def cmd_status(profile_name=None):
 
     _show_pipeline_status()
 
+def cmd_validate(profile_name):
+    """Run all pre-pipeline checks and report every issue (not just the first)."""
+    issues = []
+
+    print(f"\n=== VALIDATE: {profile_name} ===\n")
+
+    # 1. API key
+    api_key = os.environ.get("OPENAI_API_KEY", "")
+    if api_key:
+        print("  [x] API key              set")
+    else:
+        print("  [ ] API key              not set")
+        issues.append("OPENAI_API_KEY not set")
+
+    # 2. Profile fields (already validated by set_profile/load_profile)
+    print(f"  [x] Profile              {ROLE} @ {COMPANY} ({DOMAIN})")
+
+    # 3 & 4. Adapted files: non-stub + expected markers
+    adapted_dir = BASE_DIR / "profiles" / profile_name / "adapted"
+    for fname, expected in _ADAPTED_EXPECTED_MARKERS.items():
+        fpath = adapted_dir / fname
+        if _is_stub(fpath):
+            print(f"  [ ] adapted/{fname:20s} stub or missing")
+            issues.append(f"adapted/{fname} is stub or missing")
+        else:
+            text = fpath.read_text(encoding="utf-8")
+            sections = _parse_adapted_sections(text)
+            missing = [m for m in expected if m not in sections]
+            if missing:
+                print(f"  [ ] adapted/{fname:20s} missing {', '.join(missing)}")
+                issues.append(f"adapted/{fname} missing {', '.join(missing)}")
+            else:
+                count = len(expected)
+                label = f"{count} marker{'s' if count != 1 else ''}"
+                if count == 1:
+                    label = f"1 marker ({expected[0]})"
+                print(f"  [x] adapted/{fname:20s} {label}")
+
+    # 5. Prompt files
+    prompt_names = ["syllabus.md", "content.md", "distill.md"]
+    missing_prompts = [n for n in prompt_names if not (PROMPTS / n).exists()]
+    if missing_prompts:
+        print(f"  [ ] Prompts              missing {', '.join(missing_prompts)}")
+        issues.append(f"missing prompt files: {', '.join(missing_prompts)}")
+    else:
+        print(f"  [x] Prompts              {', '.join(prompt_names)}")
+
+    # Summary
+    if issues:
+        print(f"\n=== {len(issues)} issue{'s' if len(issues) != 1 else ''} found ===\n")
+    else:
+        print(f"\n=== all checks passed ===\n")
+
+    return len(issues) == 0
+
+
 # Cost per API call by model prefix (rough estimates in USD)
 _COST_PER_CALL = {
     "gpt-5.2-pro": 2.00,
@@ -1315,7 +1381,7 @@ def cmd_all(client, force=False):
 def main():
     sys.stdout.reconfigure(encoding="utf-8")
     p = argparse.ArgumentParser(description="Interview Prep Pipeline")
-    p.add_argument("command", choices=["all","syllabus","content","add","setup","package","status","render","init"])
+    p.add_argument("command", choices=["all","syllabus","content","add","setup","package","status","validate","render","init"])
     p.add_argument("file", nargs="?", help="File path for 'add'/'render', or profile name for 'init'")
     p.add_argument("--profile", type=str, default=None,
                    help="Profile name (uses profiles/{name}/ for config and data)")
@@ -1338,9 +1404,10 @@ def main():
         cmd_init(name)
         return
 
-    # API commands require --profile
+    # API commands and validate require --profile
     _API_COMMANDS = {"all", "syllabus", "content", "add", "setup"}
-    if args.command in _API_COMMANDS and not args.profile:
+    _PROFILE_REQUIRED = _API_COMMANDS | {"validate"}
+    if args.command in _PROFILE_REQUIRED and not args.profile:
         print(f"ERROR: --profile required for '{args.command}'.")
         print(f"  Run 'python prep.py init <name>' to create a profile.")
         sys.exit(1)
@@ -1363,8 +1430,9 @@ def main():
     if args.command in ("all", "syllabus", "content", "add", "setup", "package"):
         ensure_dirs()
 
-    if args.command == "status":  cmd_status(profile_name=args.profile); return
-    if args.command == "package": cmd_package(); return
+    if args.command == "status":   cmd_status(profile_name=args.profile); return
+    if args.command == "validate": sys.exit(0 if cmd_validate(args.profile) else 1)
+    if args.command == "package":  cmd_package(); return
     if args.command == "render":
         if not args.file:
             print("Usage: python prep.py render <prompt-file>")
