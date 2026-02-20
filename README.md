@@ -159,6 +159,18 @@ All API commands (`all`, `syllabus`, `content`, `add`) require `--profile`.
 
 Common flags: `--force` (regenerate existing), `--yes` (skip cost confirmation).
 
+## Pipeline Stages
+
+```
+  init          setup / syllabus       content           package
+┌───────┐     ┌──────────────┐     ┌────────────┐     ┌──────────┐
+│profile│────>│   agendas    │────>│  episodes   │────>│ gem.md + │
+│created│     │  generated   │     │  generated  │     │ notebook │
+└───────┘     └──────────────┘     └────────────┘     └──────────┘
+```
+
+Each stage is **idempotent** — commands skip files that already exist unless you pass `--force`. The pipeline is **resumable**: if content generation stops halfway, re-running the command picks up where it left off.
+
 ## Iterating
 
 Common Day 2 workflows:
