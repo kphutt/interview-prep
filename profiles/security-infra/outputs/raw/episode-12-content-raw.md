@@ -21,7 +21,7 @@ Two-person control on a submarine: one person can start the launch sequence, but
 - The submarine launch log maps to tamper-evident audit trails that correlate `request_id → approvals → issued creds → enforcement events` for incident response and compliance.
 - Adversarial mapping: if both keys live in the same pocket (requester can approve, or approvals don’t require strong step-up), a single compromised account collapses MPA into single-party control.
 
-## L4 Trap
+## Common Trap
 - **Junior approach:** “We trust admins; background checks are enough.” **Why it fails at scale:** ATO, coercion, and human error are probabilistic certainties across large orgs. **Friction/toil risk:** you pay later via longer IR, ambiguous root cause, and repeated “who touched prod?” investigations that pull in multiple teams.
 - **Junior approach:** “Require approvals for everything, always.” **Why it fails at scale:** approval queues become the new global lock; responders optimize for speed by bypassing controls. **Friction/toil risk:** you create a shadow-access culture (shared secrets, backchannel group adds) and inject tail latency into incident response.
 - **Red flag:** “Approvals happen in chat (‘LGTM’, emoji) not cryptographically bound to a specific `request_id`/`resource`.” **Why it fails at scale:** you can’t prove what was approved vs executed; approvals become replayable and non-auditable. **Friction/toil risk:** post-incident compliance becomes manual log archaeology and blocks operational learning.

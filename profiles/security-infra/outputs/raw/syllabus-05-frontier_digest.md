@@ -9,7 +9,7 @@
 3) **The "Mental Model" (A simple analogy).**  
 Think of your platform as an airport: ZTNA is the checkpoint for humans, workload identity is the badge scanner for staff-only doors, SSRF controls are “no access to the control tower,” and SLSA is the tamper-evident luggage tag that proves where a package came from. The hard part is not the badge tech—it’s keeping the checkpoint open, fast, and hard to bypass under partial outages.
 
-4) **The "L4 Trap" (Common junior mistake + why it fails at scale).**
+4) **The "Common Trap" (Common junior mistake + why it fails at scale).**
 - “Just deploy a proxy/mesh and we’re Zero Trust now.” Security-only thinking ignores posture dependency outages, policy drift, and bypass paths (headers, legacy ports).  
 - “Block metadata everywhere today.” Security-only thinking ignores credential bootstrapping—teams will hardcode long-lived keys to stop outages.
 

@@ -20,7 +20,7 @@ Good detections resemble airport security: you don’t try to recognize every ba
 - “Secondary screening with more context” → enrichment (owner/tier, group membership, ASN) and correlation windows to turn weak signals into actionable incidents without exploding page volume.
 - “Cameras down / guards diverted” → first-class ingestion-gap detection; adversaries kill agents/block egress and pipelines drop under backpressure—if you don’t alert on missing telemetry, you’re optimizing a detector that may be blind.
 
-## L4 Trap
+## Common Trap
 - Red flag: **Junior approach:** alert on raw counts of failed logins/403s/exceptions; **fails at scale:** baseline is dominated by bots, retries, misconfigs, and deploy noise, so precision collapses; **toil/friction:** SOC pages become “ignore by default,” app teams get dragged into constant false-positive triage and start sampling/logging less, reducing true coverage.
 - Red flag: **Junior approach:** write/modify detections directly in the SIEM UI; **fails at scale:** no versioning, code review, tests, or reproducible rollback—schema changes and parser tweaks silently break rules; **toil/friction:** on-call can’t bisect regressions, audit/compliance can’t trace changes, and every fix becomes a high-risk manual operation during incidents.
 - Red flag: **Junior approach:** enrich in-rule by calling LDAP/inventory/asset DB on the hot path; **fails at scale:** introduces latency spikes and hard dependencies, plus privacy boundary crossings; **toil/friction:** outages in enrichment systems disable detections or cascade failures, and developers/SREs get paged for “security pipeline broke prod dependency.”

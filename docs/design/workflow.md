@@ -145,7 +145,7 @@ The number of API calls scales with episode count. The pipeline shows a cost est
 | **Prerequisites** | Step 6 (agendas exist) |
 | **Produces** | Files in `profiles/<name>/outputs/episodes/` and `outputs/raw/` |
 
-One API call per episode. Each call takes the episode agenda and produces a dense Staff-level technical document with sections: Title, Hook, Mental Model, L4 Trap, Nitty Gritty, Staff Pivot, Scenario Challenge.
+One API call per episode. Each call takes the episode agenda and produces a dense Staff-level technical document with sections: Title, Hook, Mental Model, Common Trap, Nitty Gritty, Staff Pivot, Scenario Challenge.
 
 Output: `episode-NN-content.md` in `outputs/episodes/`, raw responses in `outputs/raw/`.
 

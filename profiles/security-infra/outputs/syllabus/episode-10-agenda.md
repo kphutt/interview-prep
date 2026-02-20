@@ -8,7 +8,7 @@
 3) **The "Mental Model" (A simple analogy).**  
 Crypto agility is changing a car engine while the car is doing 70 mph: you can’t stop the fleet, and not every driver upgrades at once. Hybrid crypto is like running **two engines in parallel** for a while so either one failing doesn’t crash the car.
 
-4) **The "L4 Trap" (Common junior mistake + why it fails at scale).**
+4) **The "Common Trap" (Common junior mistake + why it fails at scale).**
 - “We’ll wait until PQ is fully standardized everywhere.” Security-only thinking ignores that long-lived secrets can be recorded today.  
 - “Hardcode algorithms and key sizes in code.” You guarantee painful emergency migrations when primitives break or policies change.
 

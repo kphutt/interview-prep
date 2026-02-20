@@ -14,7 +14,7 @@ The prompts are the crown jewels — they define episode structure, depth target
 
 The pipeline produces three outputs from your domain description:
 
-1. **Deep-dive study documents** — one episode per topic covering your domain end-to-end, each with Title, Hook, Mental Model, L4 Trap (common wrong answers), Nitty Gritty (protocol/wire details), Staff Pivot, and Scenario Challenge sections
+1. **Deep-dive study documents** — one episode per topic covering your domain end-to-end, each with Title, Hook, Mental Model, Common Trap (common wrong answers), Nitty Gritty (protocol/wire details), Staff Pivot, and Scenario Challenge sections
 2. **NotebookLM podcasts** — each episode becomes a podcast you can listen to during commutes
 3. **Gemini Gem coaching bot** — an interview coach with rapid-fire, mock interview, and explore modes
 

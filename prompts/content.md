@@ -46,7 +46,7 @@ OUTPUT FORMAT (STRICT)
   ## Title
   ## Hook
   ## Mental Model
-  ## L4 Trap
+  ## Common Trap
   ## Nitty Gritty
   ## Staff Pivot
   ## Scenario Challenge
@@ -70,7 +70,7 @@ LENGTH + DEPTH GUIDANCE (STRICT)
 - Then 3–5 bullets mapping analogy → system components / decisions.
 - At least 1 bullet must map the analogy to a real failure mode or adversarial behavior.
 
-## L4 Trap
+## Common Trap
 - 4–8 bullets.
 - Each bullet MUST include:
   - what the junior approach is,
@@ -156,7 +156,7 @@ QUALITY SELF-CHECK (RUN SILENTLY; REVISE UNTIL TRUE)
 - If {COMPANY}-internal terms appear, I included an "Industry Equivalent:" line.
 - I included 3–5 `Probe:` items inside **Interviewer Probes (Staff-level)** in Nitty Gritty.
 - I included 5–10 `Coding hook:` items inside **Implementation / Code Review / Tests** in Nitty Gritty.
-- I included 4–6 `Red flag:` items total (across L4 Trap and/or Threats & Failure Modes), specific to the agenda.
+- I included 4–6 `Red flag:` items total (across Common Trap and/or Threats & Failure Modes), specific to the agenda.
 - I included 3–6 `Anchor:` items in Nitty Gritty, each <= 12 words of justification, agenda-implied.
 - I included 1–3 `Tie-back:` items (Staff Pivot preferred; rubric acceptable), without inventing personal experience.
 - No section exceeds its length limits; if close, I prioritized specificity over breadth.

@@ -20,7 +20,7 @@ A uniform isn’t identity; a badge is. In mobile OAuth, a redirect URI looks li
 - The “bouncer” → iOS/Android link resolver that decides whether to open the app or stay in the browser; its caching/heuristics become part of your reliability model.
 - Adversarial mapping: a malicious app “wears the same uniform” by registering the same URL scheme, intercepts codes, and creates user confusion that support/on-call must triage without clear telemetry.
 
-## L4 Trap
+## Common Trap
 - Red flag: “Use `myapp://callback` (custom scheme) because it’s easy.” It fails at scale because scheme namespace is not exclusive; installed apps can collide and intercept, turning authentication into a device-dependent lottery; it drives chronic support tickets and hard-to-reproduce on-call escalations (“only happens on some phones”).
 - Red flag: “Hide a `client_secret` in the app and treat it like a confidential client.” It fails because mobile binaries are extractable; you end up in a key-rotation treadmill after the first leak, plus brittle obfuscation/scan tooling that slows releases and creates false confidence.
 - Red flag: “Use an embedded WebView to control the flow.” It fails because it breaks SSO and cookie sharing, increases phishing surface, and can trigger IdP/platform blocks; operationally it causes OS-update regressions and forces app hotfixes instead of server-side mitigations.

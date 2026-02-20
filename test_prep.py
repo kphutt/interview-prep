@@ -1173,7 +1173,7 @@ class TestPromptTemplateStructure(unittest.TestCase):
 
     def test_syllabus_has_seven_components(self):
         t = prep.load_prompt("syllabus")
-        for section in ["Title", "Hook", "Mental Model", "L4 Trap",
+        for section in ["Title", "Hook", "Mental Model", "Common Trap",
                         "Nitty Gritty", "Staff Pivot", "Scenario Challenge"]:
             self.assertIn(section, t)
 
@@ -1184,7 +1184,7 @@ class TestPromptTemplateStructure(unittest.TestCase):
 
     def test_content_has_section_headings(self):
         t = prep.load_prompt("content")
-        for heading in ["## Title", "## Hook", "## Mental Model", "## L4 Trap",
+        for heading in ["## Title", "## Hook", "## Mental Model", "## Common Trap",
                         "## Nitty Gritty", "## Staff Pivot", "## Scenario Challenge"]:
             self.assertIn(heading, t)
 
@@ -1201,7 +1201,7 @@ class TestPromptTemplateStructure(unittest.TestCase):
 
     def test_distill_has_seven_components(self):
         t = prep.load_prompt("distill")
-        for section in ["Title", "Hook", "Mental Model", "L4 Trap",
+        for section in ["Title", "Hook", "Mental Model", "Common Trap",
                         "Nitty Gritty", "Staff Pivot", "Scenario Challenge"]:
             self.assertIn(section, t)
 

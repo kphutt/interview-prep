@@ -21,7 +21,7 @@ SSRF is convincing a receptionist to fetch documents on your behalf; the metadat
 - Alarms and security desk → metrics/alerts on blocked metadata attempts + unusual credential API usage; these drive incident response and exception governance.
 - Failure mode mapping (adversary behavior) → attacker uses redirects/DNS rebinding/header injection to “walk” the receptionist past naive checks and into the server room.
 
-## L4 Trap
+## Common Trap
 - Red flag: “Blacklist `169.254.169.254` with a regex.” Fails at scale because redirects, alternate encodings, IPv6, and proxy paths bypass string checks; creates dev friction when teams cargo-cult different regexes and SREs end up debugging inconsistent blocks.
 - Red flag: “Validate the URL string once, then fetch.” Fails because DNS can change after validation (rebinding) and redirects can change destination; on-call toil spikes due to intermittent repros and “works in staging” discrepancies.
 - Red flag: “Just require IMDSv2 and call it solved.” Reduces some attack paths but still allows SSRF-driven metadata access if attackers can set required headers or if internal components legitimately fetch tokens; creates a false sense of closure and pushes risk into detection/IR without prevention.

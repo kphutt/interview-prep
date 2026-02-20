@@ -58,7 +58,7 @@ Then 12 episodes, each formatted as:
 ### Episode N: <Title framed as tension or decision>
 **Focus:** <1-line focus>
 **Mental Model:** "<Concrete analogy>"
-**The L4 Trap:** "<What a junior would do wrong>" (Fails because <why it fails at scale>).
+**The Common Trap:** "<What a junior would do wrong>" (Fails because <why it fails at scale>).
 **The Nitty Gritty:**
 - <2-4 concrete technical bullets: protocols, data structures, algorithms, config details>
 **The Staff Pivot:** "<Trade-off argument at Staff level>"
@@ -68,7 +68,7 @@ Rules for episode seeds:
 - Each episode covers ONE core topic from the domain's sub-areas
 - Title should be framed as a tension or architectural decision, not a topic label
 - Mental Model must be a concrete analogy that helps reason about the problem
-- L4 Trap must show what breaks at scale (not just "it's wrong" but the operational/business cost)
+- Common Trap must show what breaks at scale (not just "it's wrong" but the operational/business cost)
 - Nitty Gritty must include real protocol names, config keys, algorithms, data formats — not vague descriptions
 - Staff Pivot must frame a genuine architectural trade-off with competing approaches
 - Distribute episodes across all domain sub-areas
@@ -166,6 +166,6 @@ The Bookshelf should be a 4-6 row reference table mapping domain layers/abstract
 - lenses.md has all 5 sections (DOMAIN_LENS, NITTY_GRITTY_LAYOUT, DOMAIN_REQUIREMENTS, DISTILL_REQUIREMENTS, STAKEHOLDERS)
 - gem-sections.md has all 4 sections (GEM_BOOKSHELF, GEM_EXAMPLES, GEM_CODING, GEM_FORMAT_EXAMPLES)
 - Episode seeds include real protocol/tool/algorithm names, not just topic labels
-- Every L4 Trap explains the operational/business cost of the junior approach
+- Every Common Trap explains the operational/business cost of the junior approach
 - Coverage framework references a real certification/framework or creates a sensible custom one
 - Each file delimiter follows the exact format: === FILE: <name> ===

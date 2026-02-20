@@ -8,7 +8,7 @@
 3) **The "Mental Model" (A simple analogy).**  
 Instead of “you’re allowed because you’re in this building (subnet),” it’s “you’re allowed because you’re *Alice from Payments* (workload identity).” Every RPC is like a phone call with verified caller ID on both ends.
 
-4) **The "L4 Trap" (Common junior mistake + why it fails at scale).**
+4) **The "Common Trap" (Common junior mistake + why it fails at scale).**
 - “Just trust the VPC / cluster network.” Security-only thinking ignores how quickly attackers move laterally once any pod is compromised.  
 - “Make certs super short-lived everywhere.” You’ll DoS your own CA/identity plane and turn cert rotation into a constant incident.
 

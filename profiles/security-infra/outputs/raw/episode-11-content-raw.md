@@ -21,7 +21,7 @@ Think of each object as a letter sealed in its own envelope (a per-object DEK en
 - The “changing combination” → rotate KEK version + background **rewrap** job; emergency rotation is prioritization + containment, not a 5 PB rewrite.
 - Failure mode mapping: if an attacker gets “safe access” (`kms:Decrypt` or CMK grants) or you reuse a GCM nonce, the envelope doesn’t help—your blast radius becomes “everything that KEK can unwrap,” and incident response shifts to permissions revocation + rewrap completion time.
 
-## L4 Trap
+## Common Trap
 - **Red flag:** “Use one AES key for all data” → rotation becomes a petabyte rewrite; compromise becomes company-ending; dev friction spikes because every service must coordinate a global re-encrypt cutover and handle mixed states.
 - **Red flag:** “Call KMS decrypt on every read” → p99 latency and cost explode at 250k RPS; KMS brownouts become user-visible outages; on-call toil grows from retry storms and quota paging.
 - “Store the plaintext DEK on disk for caching” → looks like a performance win; actually creates durable key material sprawl, complex secure deletion requirements, and audit/compliance failure when hosts are forensically recovered.

@@ -25,7 +25,7 @@ SSRF is convincing a receptionist to fetch documents on your behalf; the metadat
 - Alarms and security desk → metrics/alerts on blocked metadata attempts + unusual credential API usage; these drive incident response and exception governance.
 - Failure mode mapping (adversary behavior) → attacker uses redirects/DNS rebinding/header injection to “walk” the receptionist past naive checks and into the server room.
 
-## L4 Trap
+## Common Trap
 - Red flag: “Blacklist `169.254.169.254` with a regex.” Fails at scale because redirects, alternate encodings, IPv6, and proxy paths bypass string checks; creates dev friction when teams cargo-cult different regexes and SREs end up debugging inconsistent blocks.
 - Red flag: “Validate the URL string once, then fetch.” Fails because DNS can change after validation (rebinding) and redirects can change destination; on-call toil spikes due to intermittent repros and “works in staging” discrepancies.
 - Red flag: “Just require IMDSv2 and call it solved.” Reduces some attack paths but still allows SSRF-driven metadata access if attackers can set required headers or if internal components legitimately fetch tokens; creates a false sense of closure and pushes risk into detection/IR without prevention.
@@ -167,7 +167,7 @@ Provenance is a tamper-evident receipt stapled to an artifact: “this digest ca
 - Adversarial failure mode mapping → if an attacker controls a long-lived builder, they can produce *both* malicious artifacts *and* “valid” receipts; without ephemeral/hermetic builders and bounded credentials, the bouncer is checking forged receipts.
 - Operational mapping → bouncer decisions must be cacheable and replay-safe so partial outages (key fetch, provenance store) don’t become global deploy outages.
 
-## L4 Trap
+## Common Trap
 - **Red flag:** “Have developers PGP-sign artifacts.” Fails at scale because human key hygiene is inconsistent and keys get phished/stolen; it also creates persistent toil (key rotation, revocation, lost keys) and brittle release blocks that push teams to bypass controls under pager pressure.
 - **Red flag:** “Just add an image scanner and block critical CVEs.” Scanners don’t prevent a compromised builder from shipping malware *today* and tend to add slow, noisy gates; the result is false confidence plus repeated emergency exceptions that degrade both security posture and deploy reliability.
 - **Red flag:** “Enforce ‘must be signed’ without specifying *who* is allowed to sign.” At scale, teams generate ad-hoc keys or reuse shared keys; verification becomes inconsistent across clusters/environments, causing deny storms, hotfix blocks, and on-call escalations to “temporarily disable enforcement.”

@@ -8,7 +8,7 @@
 3) **The "Mental Model" (A simple analogy).**  
 SSRF is convincing a receptionist to fetch documents on your behalf. The metadata endpoint is the locked server room—your receptionist should never be able to enter it, even if tricked.
 
-4) **The "L4 Trap" (Common junior mistake + why it fails at scale).**
+4) **The "Common Trap" (Common junior mistake + why it fails at scale).**
 - “Blacklist `169.254.169.254` with a regex.” Security-only thinking ignores redirects, DNS rebinding, IPv6, and proxy paths—attackers bypass it.  
 - “Just require IMDSv2 and call it solved.” It reduces risk but doesn’t eliminate SSRF-driven credential theft by itself.
 

@@ -99,7 +99,7 @@ Settled decisions: [decisions.md](decisions.md)
 
 - **Lines 43-44** — Requirements include "protocol/crypto details" — Security-specific.
 - **Line 71** — Example uses "use mTLS" — domain-specific.
-- **Line 80** — Quality self-check says "L4 Trap calls out 'security-only thinking' failure" — domain-specific.
+- **Line 80** — Quality self-check says "Common Trap calls out 'security-only thinking' failure" — domain-specific.
 - Shares the 7-section format with content.md — same injection points apply.
 
 ### `prompts/gem.md`
@@ -211,7 +211,7 @@ Even without profiles implemented, a friend could adapt the tool manually. This 
 
 **Manual adaptation steps (no code changes needed):**
 1. Set env vars: `PREP_ROLE`, `PREP_COMPANY`, `PREP_DOMAIN`
-2. In `prompts/syllabus.md`, replace lines 117-238 (training data) with 12 episode seeds for their domain — each with Title, Focus, Mental Model, L4 Trap, Nitty Gritty, Staff Pivot
+2. In `prompts/syllabus.md`, replace lines 117-238 (training data) with 12 episode seeds for their domain — each with Title, Focus, Mental Model, Common Trap, Nitty Gritty, Staff Pivot
 3. In `prompts/syllabus.md`, replace "CISSP" (line 69) with their domain's coverage framework
 4. In `prompts/content.md`, replace domain lens (line 12) and RRK lens (line 13) with domain-appropriate descriptions
 5. In `prompts/content.md`, update canonical Nitty Gritty subsections (lines 88-93) for their domain
@@ -233,7 +233,7 @@ This is achievable — 30-60 minutes of prompt editing plus $25-30 in API costs.
 4. **The intake prompt** — first pass at `prompts/intake.md`. What questions does it ask? What format does it output?
 5. **Dynamic episode count** — how does the pipeline adapt? Variable batch sizes? Different syllabus prompt modes?
 6. **Phasing** — what's the minimum viable change that gets profiles working without breaking what exists?
-7. **Does the 7-section structure generalize?** — The sections (Hook, Mental Model, L4 Trap, Nitty Gritty, Staff Pivot, Scenario Challenge) are conceptually generic. "L4 Trap" assumes Google/Meta leveling (L4 = junior). "Staff Pivot" assumes Staff-level target. These are labels, not structure — likely fine to keep as-is since they're well-understood shorthand, even if the role is "Senior" not "Staff." But worth deciding: does the meta-prompt ever need to generate different section names?
+7. **Does the 7-section structure generalize?** — The sections (Hook, Mental Model, Common Trap, Nitty Gritty, Staff Pivot, Scenario Challenge) are conceptually generic. "Common Trap" assumes Google/Meta leveling (L4 = junior). "Staff Pivot" assumes Staff-level target. These are labels, not structure — likely fine to keep as-is since they're well-understood shorthand, even if the role is "Senior" not "Staff." But worth deciding: does the meta-prompt ever need to generate different section names?
 8. **Should the second persona be renamed per domain?** — "RRK" (Reliability / Risk / Knobs) is meaningful for infrastructure. For ML Systems it might be "Evaluation / Drift / Scale." For Frontend, "Performance / Accessibility / Complexity." The persona CONCEPT (two complementary lenses on the same material) is one of the best ideas in the tool. The question is whether "RRK" is generic enough or if the name should be profile-driven. Leaning toward: keep the structure, let meta-prompt generate name and description.
 9. **What replaces the CISSP coverage map?** — The scaffold/merge modes output a table mapping episodes to CISSP domains. This is the quality guarantee that the syllabus covers the domain comprehensively. For a new domain, the meta-prompt needs to generate equivalent coverage categories. For Data Engineering, maybe: Storage, Compute, Orchestration, Quality, Governance. The categories ARE the domain expertise.
 10. **How to validate output quality for new domains?** — S&I content was manually reviewed by a domain expert. For a new domain, the friend might not have the calibrated eye. Options: (a) syllabus-first review (generate agendas, read them, iterate), (b) pipeline self-assessment ("does this agenda cover the JD requirements?"), (c) just trust the meta-prompt + model. Leaning toward (a) — it's cheap, already supported, and puts the human in the loop at the right moment.

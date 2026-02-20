@@ -15,7 +15,7 @@ Think of identity security as a building. The syllabus covered the locks (authn)
 - Foundation → DDoS/Anycast: availability infrastructure that must absorb attacks before they reach your application layer. If your edge goes down, your identity stack is irrelevant.
 - Cameras → behavioral biometrics: continuous signals that re-evaluate trust during a session. The gap between "authenticated at login" and "still the same person 4 hours later" is where session hijacking lives.
 
-## L4 Trap
+## Common Trap
 - **IAL3 trap:** "We verify email addresses." Email verification is IAL1 at best — it proves you control an inbox, not that you're a real person. For regulated flows (financial onboarding, gov identity, high-value account creation), you need document verification, liveness detection, and binding to a credential. Junior engineers skip this because they think authentication *is* identity, when it's actually downstream of proofing.
 - Red flag: "Identity proofing is a product problem, not a security problem." It's both. A weak proofing flow is an ATO vector at account creation, before any of your session or token security matters. If fraud creates accounts at scale, your detection engineering (Ep 9) is fighting synthetic identities, not just compromised ones.
 - **DDoS trap:** "Our cloud provider handles DDoS." Managed DDoS protection absorbs volumetric floods, but application-layer attacks (slowloris, credential stuffing at login, API abuse) pass right through. The junior mistake is treating DDoS as a checkbox rather than an architecture decision about where traffic is absorbed, how capacity is provisioned, and what degrades gracefully vs. fails hard.

@@ -22,7 +22,7 @@ Instead of “you’re allowed because you’re in this building (subnet),” it
 - Map “directory outage” → CA/identity-plane outage; design so existing calls continue (certs cached; renew before expiry with jitter) and your SLO doesn’t hinge on control-plane availability.
 - Failure mode/adversary mapping: an attacker with any foothold can forge headers and spoof source IP to pivot; only cryptographic peer identity (mTLS) prevents “I am Payments” impersonation until credentials/node are contained.
 
-## L4 Trap
+## Common Trap
 - **Red flag:** “Just trust the VPC / cluster network.” Fails at scale because one compromised workload can pivot laterally within the same flat trust zone; it creates toil because every new service needs brittle IP allowlists and on-call firefights when autoscaling or region failover changes IPs.
 - **Red flag:** “We’ll enforce security with namespace IP allowlists and shared API keys.” Breaks under churn (pods/ENIs rotate, NAT changes) and increases incident blast radius (shared keys leak = broad access); developers end up hardcoding secrets, rotating keys manually, and paging security during releases.
 - “Put identity in headers (e.g., `X-Caller-Service`) and trust it.” At scale, any compromised service can spoof headers; it also causes reliability risk because different libraries/teams implement inconsistent header parsing and canonicalization, leading to production-only auth bugs.

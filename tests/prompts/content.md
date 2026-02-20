@@ -6,7 +6,7 @@ Use these section headings exactly:
 ## Title
 ## Hook
 ## Mental Model
-## L4 Trap
+## Common Trap
 ## Nitty Gritty
 ## Staff Pivot
 ## Scenario Challenge

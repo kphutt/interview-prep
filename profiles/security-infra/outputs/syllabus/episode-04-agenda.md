@@ -8,7 +8,7 @@
 3) **The "Mental Model" (A simple analogy).**  
 A passkey is a physical key that only fits one specific lock: the browser/OS enforces the lock (origin/RP ID), not the user. That’s why it’s phishing-resistant—there’s no “type your secret into the wrong website.”
 
-4) **The "L4 Trap" (Common junior mistake + why it fails at scale).**
+4) **The "Common Trap" (Common junior mistake + why it fails at scale).**
 - “Disable passwords immediately.” Security-only thinking ignores recovery, device loss, shared devices, and support throughput; you’ll trade phishing for mass lockouts.  
 - “Treat passkeys like just another 2FA checkbox.” If you don’t enforce the right assurance level for sensitive actions, you keep your riskiest paths weak.
 

@@ -24,7 +24,7 @@ Good detections resemble airport security: you don’t try to recognize every ba
 - “Secondary screening with more context” → enrichment (owner/tier, group membership, ASN) and correlation windows to turn weak signals into actionable incidents without exploding page volume.
 - “Cameras down / guards diverted” → first-class ingestion-gap detection; adversaries kill agents/block egress and pipelines drop under backpressure—if you don’t alert on missing telemetry, you’re optimizing a detector that may be blind.
 
-## L4 Trap
+## Common Trap
 - Red flag: **Junior approach:** alert on raw counts of failed logins/403s/exceptions; **fails at scale:** baseline is dominated by bots, retries, misconfigs, and deploy noise, so precision collapses; **toil/friction:** SOC pages become “ignore by default,” app teams get dragged into constant false-positive triage and start sampling/logging less, reducing true coverage.
 - Red flag: **Junior approach:** write/modify detections directly in the SIEM UI; **fails at scale:** no versioning, code review, tests, or reproducible rollback—schema changes and parser tweaks silently break rules; **toil/friction:** on-call can’t bisect regressions, audit/compliance can’t trace changes, and every fix becomes a high-risk manual operation during incidents.
 - Red flag: **Junior approach:** enrich in-rule by calling LDAP/inventory/asset DB on the hot path; **fails at scale:** introduces latency spikes and hard dependencies, plus privacy boundary crossings; **toil/friction:** outages in enrichment systems disable detections or cascade failures, and developers/SREs get paged for “security pipeline broke prod dependency.”
@@ -154,7 +154,7 @@ Crypto agility is like swapping an engine while the car is doing 70 mph: you can
 - “Dashboard at 70 mph” maps to mandatory telemetry: what clients offered, what you selected, resumption rates, and failure reasons—otherwise incident response becomes packet-capture archaeology.
 - Failure/adversary mapping: a “bad mechanic” is downgrade/ossification (or an attacker/middlebox forcing weaker negotiation), leaving you unknowingly running on the classical “engine” only.
 
-## L4 Trap
+## Common Trap
 - Red flag: “We’ll wait until PQ is fully standardized and ubiquitous” — fails because long-lived secrets can be recorded today and partners pin stacks for 12–18+ months; it converts ambiguity into a future emergency cutover with high outage probability and sustained on-call toil.
 - Red flag: “Hardcode algorithms/key sizes in application code” — fails at scale because 100 services drift and emergency rotation requires mass rebuilds/redeploys; it creates developer friction, long lead times, inconsistent compliance posture, and a high-risk, partial rollout.
 - “Enable hybrid TLS everywhere at once” — fails because the first-order impacts are CPU spikes and ClientHello size intolerance in enterprise networks; it burns error budgets quickly and forces chaotic rollback when you lack segmentation by client cohort/hostname.

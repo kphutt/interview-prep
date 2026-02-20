@@ -21,7 +21,7 @@ Think of the platform as an airport where throughput and safety both matter. ZTN
 - Tamper-evident luggage tags → SLSA provenance verification at deploy time; if verification depends on a single online store, you can deadlock deploys during outages and force unsafe “just bypass it” culture.
 - Adversarial behavior mapping → an attacker can **bypass the checkpoint by spoofing identity headers** (`X-User`) on an internal hop if proxy→app trust is not cryptographically bound (e.g., unsigned forwarded headers).
 
-## L4 Trap
+## Common Trap
 - Red flag: “Deploy a proxy/mesh and we’re Zero Trust now” → fails because posture/policy/JWKS become implicit dependencies; at scale, a single cache miss storm or policy rollout bug causes widespread 401/503 and on-call load; developers respond by adding ad-hoc bypasses and pinning old configs.
 - Red flag: “Forward `X-User`/`X-Email` from the proxy, trust it in the app” → fails because any internal actor/service that can reach the app can spoof headers if the hop isn’t authenticated; teams then add brittle allowlists of source IPs/ports, increasing toil and reducing diagnosability.
 - “Block metadata everywhere today” → fails because some workloads still use metadata for bootstrap; outages force teams to hardcode long-lived keys or widen IAM scopes to recover, increasing blast radius and creating compliance findings.

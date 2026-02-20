@@ -24,7 +24,7 @@ A uniform isn’t identity; a badge is. In mobile OAuth, a redirect URI looks li
 - The “bouncer” → iOS/Android link resolver that decides whether to open the app or stay in the browser; its caching/heuristics become part of your reliability model.
 - Adversarial mapping: a malicious app “wears the same uniform” by registering the same URL scheme, intercepts codes, and creates user confusion that support/on-call must triage without clear telemetry.
 
-## L4 Trap
+## Common Trap
 - Red flag: “Use `myapp://callback` (custom scheme) because it’s easy.” It fails at scale because scheme namespace is not exclusive; installed apps can collide and intercept, turning authentication into a device-dependent lottery; it drives chronic support tickets and hard-to-reproduce on-call escalations (“only happens on some phones”).
 - Red flag: “Hide a `client_secret` in the app and treat it like a confidential client.” It fails because mobile binaries are extractable; you end up in a key-rotation treadmill after the first leak, plus brittle obfuscation/scan tooling that slows releases and creates false confidence.
 - Red flag: “Use an embedded WebView to control the flow.” It fails because it breaks SSO and cookie sharing, increases phishing surface, and can trigger IdP/platform blocks; operationally it causes OS-update regressions and forces app hotfixes instead of server-side mitigations.
@@ -164,7 +164,7 @@ A passkey is a physical key that only fits one specific lock: the browser/OS enf
 - Failure/adversary mapping: if you broaden the “lock” too far (shared RP ID across many apps), a compromised subdomain can legitimately request assertions—this isn’t “phishing,” it’s **trust boundary abuse**, and it shows up as hard-to-explain ATOs.
 - Spare keys/locksmith is **fallback + recovery**: attackers will pivot there immediately; if it’s not rate-limited, observable, and tiered, you’ll trade phishing for recovery-fraud and on-call pain.
 
-## L4 Trap
+## Common Trap
 - Red flag: “Disable passwords immediately.” Fails at scale because device churn, legacy browsers, shared devices, and platform bugs create mass lockouts; recovery paths get hammered, support throughput collapses, and SLOs degrade due to retries and escalations.
 - Red flag: “Treat passkeys like just another 2FA checkbox.” Fails because you don’t actually raise assurance where it matters (sensitive actions), leaving the riskiest flows protected by the weakest factor; later retrofitting step-up enforcement creates breaking changes and cross-team friction.
 - Red flag: “Implement WebAuthn verification by copy/pasting sample code.” Fails because subtle origin/RP ID validation errors cause either silent auth bypasses or widespread false rejects; debugging becomes on-call toil across multiple products and environments.

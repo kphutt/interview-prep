@@ -9,7 +9,7 @@
 3) **The "Mental Model" (A simple analogy).**  
 Think of modern identity as a building with (a) **keyed entry** (passkeys), (b) a **badge that must match the person holding it** (PoP tokens), and (c) a **security desk that can radio “invalidate that badge now”** (Shared Signals revocation). Mobile app-link verification is the doorman ensuring the badge is handed to the **right app**, not a lookalike.
 
-4) **The "L4 Trap" (Common junior mistake + why it fails at scale).**
+4) **The "Common Trap" (Common junior mistake + why it fails at scale).**
 - “If we ship passkeys, we’re done.” Security-only thinking ignores **session/token theft**, recovery, and revocation pipeline reliability.  
 - “Adopt every new draft everywhere.” You’ll create **interop breakage** and on-call load without a staged migration plan.
 

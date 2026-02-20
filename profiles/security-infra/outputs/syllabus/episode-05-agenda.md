@@ -8,7 +8,7 @@
 3) **The "Mental Model" (A simple analogy).**  
 A VPN is checking passports only at the border. Zero Trust is **passport control at every door**: every request shows identity plus a “health certificate” (device posture), and the door decides whether you enter.
 
-4) **The "L4 Trap" (Common junior mistake + why it fails at scale).**
+4) **The "Common Trap" (Common junior mistake + why it fails at scale).**
 - “Just put a login page in front of each app.” Security-only thinking ignores **device posture**, **session binding**, and consistency across 200+ apps.  
 - “Fail closed globally if a dependency is down.” You’ll trade “more secure” for a **company-wide outage**.
 

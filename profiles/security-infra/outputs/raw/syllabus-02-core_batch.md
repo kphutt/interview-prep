@@ -9,7 +9,7 @@
 3) **The "Mental Model" (A simple analogy).**  
 Bearer tokens are cash: possession is enough. Sender-constrained tokens are a credit card that only works when presented with the right proof (a PIN / device key / certificate), so theft alone isn’t sufficient.
 
-4) **The "L4 Trap" (Common junior mistake + why it fails at scale).**
+4) **The "Common Trap" (Common junior mistake + why it fails at scale).**
 - “Just shorten token TTL to 5 minutes.” This reduces window size but doesn’t stop immediate replay, and it DDOS-es your IdP/token minting path.  
 - “Mandate mTLS for all clients.” Security-only thinking ignores that public clients (mobile/SPAs/partners) can’t reliably manage client certs.
 
@@ -62,7 +62,7 @@ Bearer tokens are cash: possession is enough. Sender-constrained tokens are a cr
 3) **The "Mental Model" (A simple analogy).**  
 TTL is “waiting for the battery to die.” Revocation is “pulling the plug”: you can keep sessions long *and* still terminate access quickly when risk changes.
 
-4) **The "L4 Trap" (Common junior mistake + why it fails at scale).**
+4) **The "Common Trap" (Common junior mistake + why it fails at scale).**
 - “Make access tokens 2 minutes and refresh constantly.” This shifts load to the IdP, increases tail latency, and still doesn’t stop immediate use of a stolen token.  
 - “Just add a DB lookup to check revocation on every request.” Security-only thinking ignores the latency/SLO cost and makes your auth store a global bottleneck.
 
@@ -114,7 +114,7 @@ TTL is “waiting for the battery to die.” Revocation is “pulling the plug�
 3) **The "Mental Model" (A simple analogy).**  
 A uniform isn’t identity; a badge is. In mobile OAuth, the “uniform” is the redirect URI—any app can wear it. Universal/App Links are the OS checking the badge (app signature bound to a domain) before handing over the redirect.
 
-4) **The "L4 Trap" (Common junior mistake + why it fails at scale).**
+4) **The "Common Trap" (Common junior mistake + why it fails at scale).**
 - “Use `myapp://callback` and hide a `client_secret` in the app.” Secrets in apps are extractable, and URL schemes are hijackable—security-only thinking ignores platform realities.  
 - “Use an embedded WebView for control.” It harms SSO, increases phishing surface, and breaks modern platform guidance.
 
@@ -165,7 +165,7 @@ A uniform isn’t identity; a badge is. In mobile OAuth, the “uniform” is th
 3) **The "Mental Model" (A simple analogy).**  
 A passkey is a physical key that only fits one specific lock: the browser/OS enforces the lock (origin/RP ID), not the user. That’s why it’s phishing-resistant—there’s no “type your secret into the wrong website.”
 
-4) **The "L4 Trap" (Common junior mistake + why it fails at scale).**
+4) **The "Common Trap" (Common junior mistake + why it fails at scale).**
 - “Disable passwords immediately.” Security-only thinking ignores recovery, device loss, shared devices, and support throughput; you’ll trade phishing for mass lockouts.  
 - “Treat passkeys like just another 2FA checkbox.” If you don’t enforce the right assurance level for sensitive actions, you keep your riskiest paths weak.
 

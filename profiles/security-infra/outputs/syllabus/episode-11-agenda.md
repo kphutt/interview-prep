@@ -8,7 +8,7 @@
 3) **The "Mental Model" (A simple analogy).**  
 You put a letter in an envelope (DEK encrypts data), then put the envelope in a safe (KEK encrypts the DEK). When you change the safe’s combination (rotate KEK), you don’t rewrite every letter—you just move the envelopes to the new safe.
 
-4) **The "L4 Trap" (Common junior mistake + why it fails at scale).**
+4) **The "Common Trap" (Common junior mistake + why it fails at scale).**
 - “Use one AES key for all data.” Security-only thinking makes rotation a petabyte rewrite and turns compromise into a company-ending event.  
 - “Call KMS decrypt for every read.” It tanks p99 latency, increases cost, and makes KMS a global availability dependency.
 

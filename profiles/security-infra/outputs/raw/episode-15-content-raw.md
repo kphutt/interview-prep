@@ -21,7 +21,7 @@ Treat the security stack as a production feedback system: sensors measure realit
 - Plant → the fleet plus shared dependencies (KMS, approval service, log ingestion); treat them like reliability-critical systems with error budgets, not “security tooling.”
 - Real failure mode mapping → attackers can force telemetry gaps (DDoS/backpressure/collector crash) and trigger TLS downgrade paths; if your sensors don’t detect the gap/downgrade, your control loops will confidently do nothing.
 
-## L4 Trap
+## Common Trap
 - Junior approach: “Enable hybrid/PQC everywhere now”; fails at scale because ML‑KEM key shares increase handshake bytes/CPU, breaking legacy clients and middleboxes and blowing handshake p99/availability; the resulting rollback whiplash creates permanent allowlists and exception debt.
 - Junior approach: “Require two-person approval for every privileged action”; fails when the approval service partitions or approvers aren’t reachable during P0s; on-call invents shadow bypasses (shared accounts, copied tokens), increasing toil and making audit trails incomplete.
 - Red flag: “Success = more SIEM rules / more AI triage”; fails because schema drift + enrichment joins create latency/backpressure, and false positives page the wrong teams; developers respond by sampling logs, removing fields, or disabling exporters to protect SLOs.

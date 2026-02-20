@@ -23,7 +23,7 @@ CRITICAL FRAMING
 - Every core episode (Episodes 1-{TOTAL_CORE}) must be both:
   - Domain: {DOMAIN_LENS}.
   - RRK: role-related knowledge beyond {DOMAIN} (incident response judgment, risk prioritization under ambiguity, operational excellence/SRE thinking, stakeholder influence, and policy/compliance trade-offs).
-- Do NOT add new top-level per-episode sections beyond the required 7 components. Instead, weave RRK into the existing components (especially Nitty Gritty, Staff Pivot, Scenario Challenge, and L4 Trap).
+- Do NOT add new top-level per-episode sections beyond the required 7 components. Instead, weave RRK into the existing components (especially Nitty Gritty, Staff Pivot, Scenario Challenge, and Common Trap).
 - Freshness / "latest & greatest" content must NOT be crammed into each core episode. It will be handled via dedicated Frontier Digest episodes (Episodes {FRONTIER_RANGE}).
 
 =====================
@@ -76,7 +76,7 @@ For EACH episode, generate a detailed Agenda with EXACTLY these 7 required compo
 1) The Title (Catchy and technical).
 2) The Hook (The core problem/tension). 2-4 bullets.
 3) The "Mental Model" (A simple analogy). 2-3 sentences.
-4) The "L4 Trap" (Common junior mistake + why it fails at scale). 1-2 bullets.
+4) The "Common Trap" (Common junior mistake + why it fails at scale). 1-2 bullets.
 5) The "Nitty Gritty" (Headers, JSON keys, protocols, patterns, operational reality). 8-14 bullets MAX.
    Must include: 2 protocol/crypto details, 2 data-plane/caching details, 2 operational details, 1 policy/control detail, 1 explicit threat/failure mode.
    If {COMPANY}-internal terms used, add: "Industry Equivalent: <generic term(s)>" (<= 2 lines).
@@ -87,7 +87,7 @@ For EACH episode, generate a detailed Agenda with EXACTLY these 7 required compo
    Must include: incident/on-call twist, multi-team/leadership twist, migration/backwards-compat constraint.
 
 RRK INTEGRATION (embed in the 7 components, do not create new sections)
-- L4 Trap: call out failure of "{DOMAIN}-only thinking"
+- Common Trap: call out failure of "{DOMAIN}-only thinking"
 - Nitty Gritty: operational hooks (logs, metrics, pages, rollout breakage)
 - Staff Pivot: prioritize risks under incomplete facts, choose now vs later, influence stakeholders
 - Scenario: force clarifying questions, assumptions, constraints, rollout + incident plan

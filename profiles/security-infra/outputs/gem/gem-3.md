@@ -26,7 +26,7 @@ A VPN is passport control only at the border: once inside, movement is implicitl
 - Map “door rules” → policy evaluation on `(user, groups, device_tier, geo, risk, app, path)` with explicit exception/expiry governance.
 - Failure/adversary mapping: an attacker with a stolen session cookie tries to “reuse the passport” from an unmanaged device; without **session binding to device posture / key material**, the proxy can be bypassed even if identity is correct.
 
-## L4 Trap
+## Common Trap
 - **Red flag:** “Put a login page in front of each app.”  
   Fails at scale because 200+ apps implement auth differently (cookie flags, redirect URIs, token validation), creating inconsistent posture enforcement; causes developer friction via per-team rewrites and increases on-call toil debugging divergent auth bugs and SSO edge cases.
 - **Red flag:** “Rely on IP allowlists/subnet ACLs once users are ‘connected.’”  
@@ -183,7 +183,7 @@ Instead of “you’re allowed because you’re in this building (subnet),” it
 - Map “directory outage” → CA/identity-plane outage; design so existing calls continue (certs cached; renew before expiry with jitter) and your SLO doesn’t hinge on control-plane availability.
 - Failure mode/adversary mapping: an attacker with any foothold can forge headers and spoof source IP to pivot; only cryptographic peer identity (mTLS) prevents “I am Payments” impersonation until credentials/node are contained.
 
-## L4 Trap
+## Common Trap
 - **Red flag:** “Just trust the VPC / cluster network.” Fails at scale because one compromised workload can pivot laterally within the same flat trust zone; it creates toil because every new service needs brittle IP allowlists and on-call firefights when autoscaling or region failover changes IPs.
 - **Red flag:** “We’ll enforce security with namespace IP allowlists and shared API keys.” Breaks under churn (pods/ENIs rotate, NAT changes) and increases incident blast radius (shared keys leak = broad access); developers end up hardcoding secrets, rotating keys manually, and paging security during releases.
 - “Put identity in headers (e.g., `X-Caller-Service`) and trust it.” At scale, any compromised service can spoof headers; it also causes reliability risk because different libraries/teams implement inconsistent header parsing and canonicalization, leading to production-only auth bugs.

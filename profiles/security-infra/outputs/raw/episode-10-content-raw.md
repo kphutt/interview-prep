@@ -21,7 +21,7 @@ Crypto agility is like swapping an engine while the car is doing 70 mph: you can
 - “Dashboard at 70 mph” maps to mandatory telemetry: what clients offered, what you selected, resumption rates, and failure reasons—otherwise incident response becomes packet-capture archaeology.
 - Failure/adversary mapping: a “bad mechanic” is downgrade/ossification (or an attacker/middlebox forcing weaker negotiation), leaving you unknowingly running on the classical “engine” only.
 
-## L4 Trap
+## Common Trap
 - Red flag: “We’ll wait until PQ is fully standardized and ubiquitous” — fails because long-lived secrets can be recorded today and partners pin stacks for 12–18+ months; it converts ambiguity into a future emergency cutover with high outage probability and sustained on-call toil.
 - Red flag: “Hardcode algorithms/key sizes in application code” — fails at scale because 100 services drift and emergency rotation requires mass rebuilds/redeploys; it creates developer friction, long lead times, inconsistent compliance posture, and a high-risk, partial rollout.
 - “Enable hybrid TLS everywhere at once” — fails because the first-order impacts are CPU spikes and ClientHello size intolerance in enterprise networks; it burns error budgets quickly and forces chaotic rollback when you lack segmentation by client cohort/hostname.

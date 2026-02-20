@@ -21,7 +21,7 @@ Modern identity is a building with layered controls: the front door accepts **ph
 - CAEP/RISC → **security desk radio**: event-driven revocation epoch lets you kill sessions quickly without per-request introspection; reliability and lag become SLO-managed production concerns.
 - Failure mode mapping: if the doorman is lax (missing App/Universal Links + PKCE + `iss` validation), an attacker can redirect the user’s “entry process” into a lookalike app/proxy and still obtain valid tokens—your badge system then faithfully authorizes the wrong party.
 
-## L4 Trap
+## Common Trap
 - Red flag: “Ship passkeys, we’re done” — fails at scale because **session/refresh token theft** remains viable and you lack a fast kill switch; it drives recurring fraud incidents and creates **support toil** via recovery edge cases (lost device, cross-platform sync gaps) that product teams will “fix” by weakening assurance.
 - Red flag: “Enable DPoP everywhere by default” — fails at scale because client ecosystems (legacy mobile, partners, header-stripping intermediaries) won’t be uniformly compatible; it creates widespread 401s, emergency rollbacks, and **long-lived exception sprawl** that permanently increases on-call burden.
 - Red flag: “Treat CAEP/RISC as best-effort telemetry” — fails because compliance turns revocation into a **time-bound commitment**; missing/lagged events become audit findings and force high-severity incidents where teams scramble to invalidate sessions manually (high toil, high blast radius).

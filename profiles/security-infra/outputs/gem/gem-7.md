@@ -25,7 +25,7 @@ Modern identity is a building with layered controls: the front door accepts **ph
 - CAEP/RISC → **security desk radio**: event-driven revocation epoch lets you kill sessions quickly without per-request introspection; reliability and lag become SLO-managed production concerns.
 - Failure mode mapping: if the doorman is lax (missing App/Universal Links + PKCE + `iss` validation), an attacker can redirect the user’s “entry process” into a lookalike app/proxy and still obtain valid tokens—your badge system then faithfully authorizes the wrong party.
 
-## L4 Trap
+## Common Trap
 - Red flag: “Ship passkeys, we’re done” — fails at scale because **session/refresh token theft** remains viable and you lack a fast kill switch; it drives recurring fraud incidents and creates **support toil** via recovery edge cases (lost device, cross-platform sync gaps) that product teams will “fix” by weakening assurance.
 - Red flag: “Enable DPoP everywhere by default” — fails at scale because client ecosystems (legacy mobile, partners, header-stripping intermediaries) won’t be uniformly compatible; it creates widespread 401s, emergency rollbacks, and **long-lived exception sprawl** that permanently increases on-call burden.
 - Red flag: “Treat CAEP/RISC as best-effort telemetry” — fails because compliance turns revocation into a **time-bound commitment**; missing/lagged events become audit findings and force high-severity incidents where teams scramble to invalidate sessions manually (high toil, high blast radius).
@@ -155,7 +155,7 @@ Think of the platform as an airport where throughput and safety both matter. ZTN
 - Tamper-evident luggage tags → SLSA provenance verification at deploy time; if verification depends on a single online store, you can deadlock deploys during outages and force unsafe “just bypass it” culture.
 - Adversarial behavior mapping → an attacker can **bypass the checkpoint by spoofing identity headers** (`X-User`) on an internal hop if proxy→app trust is not cryptographically bound (e.g., unsigned forwarded headers).
 
-## L4 Trap
+## Common Trap
 - Red flag: “Deploy a proxy/mesh and we’re Zero Trust now” → fails because posture/policy/JWKS become implicit dependencies; at scale, a single cache miss storm or policy rollout bug causes widespread 401/503 and on-call load; developers respond by adding ad-hoc bypasses and pinning old configs.
 - Red flag: “Forward `X-User`/`X-Email` from the proxy, trust it in the app” → fails because any internal actor/service that can reach the app can spoof headers if the hop isn’t authenticated; teams then add brittle allowlists of source IPs/ports, increasing toil and reducing diagnosability.
 - “Block metadata everywhere today” → fails because some workloads still use metadata for bootstrap; outages force teams to hardcode long-lived keys or widen IAM scopes to recover, increasing blast radius and creating compliance findings.
@@ -319,7 +319,7 @@ Treat the security stack as a production feedback system: sensors measure realit
 - Plant → the fleet plus shared dependencies (KMS, approval service, log ingestion); treat them like reliability-critical systems with error budgets, not “security tooling.”
 - Real failure mode mapping → attackers can force telemetry gaps (DDoS/backpressure/collector crash) and trigger TLS downgrade paths; if your sensors don’t detect the gap/downgrade, your control loops will confidently do nothing.
 
-## L4 Trap
+## Common Trap
 - Junior approach: “Enable hybrid/PQC everywhere now”; fails at scale because ML‑KEM key shares increase handshake bytes/CPU, breaking legacy clients and middleboxes and blowing handshake p99/availability; the resulting rollback whiplash creates permanent allowlists and exception debt.
 - Junior approach: “Require two-person approval for every privileged action”; fails when the approval service partitions or approvers aren’t reachable during P0s; on-call invents shadow bypasses (shared accounts, copied tokens), increasing toil and making audit trails incomplete.
 - Red flag: “Success = more SIEM rules / more AI triage”; fails because schema drift + enrichment joins create latency/backpressure, and false positives page the wrong teams; developers respond by sampling logs, removing fields, or disabling exporters to protect SLOs.

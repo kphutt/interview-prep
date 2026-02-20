@@ -6,7 +6,7 @@ Use the following example as the definition for depth and content.
 ### Episode 1: The Cache Invalidation Problem
 **Focus:** Consistency vs. Performance trade-offs in caching layers
 **Mental Model:** "A library card catalog that's always slightly out of date."
-**The L4 Trap:** "Just set a short TTL." (Creates thundering herd on expiry; doesn't solve stale reads during writes).
+**The Common Trap:** "Just set a short TTL." (Creates thundering herd on expiry; doesn't solve stale reads during writes).
 **The Nitty Gritty:**
 - **Cache-aside:** App checks cache first, falls back to DB, populates cache on miss. Simple but prone to stale data on writes.
 - **Write-through:** Write to cache and DB together. Consistent but adds write latency.

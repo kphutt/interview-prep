@@ -9,7 +9,7 @@
 3) **The "Mental Model" (A simple analogy).**  
 Think of your security stack as a production feedback system: **sensors** (detections) feed **control loops** (policy/approval), which trigger **actuators** (revocation, key rotation). If any layer lies (dropped logs, downgraded crypto, cached keys forever, rubber‑stamp approvals), you get a dashboard that says “healthy” while you’re actively losing.
 
-4) **The "L4 Trap" (Common junior mistake + why it fails at scale).**
+4) **The "Common Trap" (Common junior mistake + why it fails at scale).**
 - “Turn everything on everywhere” (AI triage, PQC, strict approvals) — security‑only thinking ignores **compatibility, latency budgets, and degraded modes**, causing outages and mass exceptions.  
 - “Buy a tool and declare victory” — without SLOs for telemetry freshness, key service dependency budgets, and audit completeness, controls fail silently.
 

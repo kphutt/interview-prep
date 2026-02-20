@@ -8,7 +8,7 @@
 3) **The "Mental Model" (A simple analogy).**  
 TTL is “waiting for the battery to die.” Revocation is “pulling the plug”: you can keep sessions long *and* still terminate access quickly when risk changes.
 
-4) **The "L4 Trap" (Common junior mistake + why it fails at scale).**
+4) **The "Common Trap" (Common junior mistake + why it fails at scale).**
 - “Make access tokens 2 minutes and refresh constantly.” This shifts load to the IdP, increases tail latency, and still doesn’t stop immediate use of a stolen token.  
 - “Just add a DB lookup to check revocation on every request.” Security-only thinking ignores the latency/SLO cost and makes your auth store a global bottleneck.
 

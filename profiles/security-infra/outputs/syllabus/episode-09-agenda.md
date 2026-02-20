@@ -8,7 +8,7 @@
 3) **The "Mental Model" (A simple analogy).**  
 Good detections are like airport security: you’re not trying to recognize every bad actor’s face—you’re looking for *behavioral anomalies with context* (wrong place, wrong time, wrong tool). The goal is to stop the attacker’s “kill chain moves,” not to alert on every suspicious-looking passenger.
 
-4) **The "L4 Trap" (Common junior mistake + why it fails at scale).**
+4) **The "Common Trap" (Common junior mistake + why it fails at scale).**
 - “Alert on failed logins / 403s / exceptions.” Security-only thinking creates noise, not coverage; SOC drowns and misses real incidents.  
 - “Write detections directly in the SIEM UI.” It doesn’t version, test, review, or roll back like software—so it fails under churn.
 

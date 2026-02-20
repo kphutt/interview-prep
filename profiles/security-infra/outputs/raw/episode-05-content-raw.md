@@ -22,7 +22,7 @@ A VPN is passport control only at the border: once inside, movement is implicitl
 - Map “door rules” → policy evaluation on `(user, groups, device_tier, geo, risk, app, path)` with explicit exception/expiry governance.
 - Failure/adversary mapping: an attacker with a stolen session cookie tries to “reuse the passport” from an unmanaged device; without **session binding to device posture / key material**, the proxy can be bypassed even if identity is correct.
 
-## L4 Trap
+## Common Trap
 - **Red flag:** “Put a login page in front of each app.”  
   Fails at scale because 200+ apps implement auth differently (cookie flags, redirect URIs, token validation), creating inconsistent posture enforcement; causes developer friction via per-team rewrites and increases on-call toil debugging divergent auth bugs and SSO edge cases.
 - **Red flag:** “Rely on IP allowlists/subnet ACLs once users are ‘connected.’”  

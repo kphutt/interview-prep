@@ -8,7 +8,7 @@
 3) **The "Mental Model" (A simple analogy).**  
 This is the two-person rule on a submarine: one person can start the process, but they can’t launch alone. JIT access is the key that only works for an hour; MPA is requiring a second key-turn from an independent operator.
 
-4) **The "L4 Trap" (Common junior mistake + why it fails at scale).**
+4) **The "Common Trap" (Common junior mistake + why it fails at scale).**
 - “We trust admins; background checks are enough.” Security-only thinking ignores account takeover, coercion, and human error at scale.  
 - “Require approvals for everything, always.” You’ll create an outage factory and a shadow-access culture (people bypass controls to get work done).
 

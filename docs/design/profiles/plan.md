@@ -396,7 +396,7 @@ Move current `outputs/` to `profiles/security-infra/outputs/` using `git mv` for
 **Goal:** Extract domain-specific content from prompts into injectable sections so new domains don't require editing prompt files.
 
 **Resolved open questions:**
-- Q7 (7-section structure) — keep as-is, it generalizes. "L4 Trap" and "Staff Pivot" are well-understood shorthand
+- Q7 (7-section structure) — keep as-is, it generalizes. "Common Trap" and "Staff Pivot" are well-understood shorthand
 - Q8 (persona renaming) — keep structure, let meta-prompt generate name and description
 - Q9 (coverage map) — meta-prompt generates domain-equivalent categories
 - Q12 (Nitty Gritty subsections) — meta-prompt generates domain-appropriate layout

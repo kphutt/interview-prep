@@ -9,7 +9,7 @@
 3) **The "Mental Model" (A simple analogy).**  
 A VPN is checking passports only at the border. Zero Trust is **passport control at every door**: every request shows identity plus a “health certificate” (device posture), and the door decides whether you enter.
 
-4) **The "L4 Trap" (Common junior mistake + why it fails at scale).**
+4) **The "Common Trap" (Common junior mistake + why it fails at scale).**
 - “Just put a login page in front of each app.” Security-only thinking ignores **device posture**, **session binding**, and consistency across 200+ apps.  
 - “Fail closed globally if a dependency is down.” You’ll trade “more secure” for a **company-wide outage**.
 
@@ -62,7 +62,7 @@ A VPN is checking passports only at the border. Zero Trust is **passport control
 3) **The "Mental Model" (A simple analogy).**  
 Instead of “you’re allowed because you’re in this building (subnet),” it’s “you’re allowed because you’re *Alice from Payments* (workload identity).” Every RPC is like a phone call with verified caller ID on both ends.
 
-4) **The "L4 Trap" (Common junior mistake + why it fails at scale).**
+4) **The "Common Trap" (Common junior mistake + why it fails at scale).**
 - “Just trust the VPC / cluster network.” Security-only thinking ignores how quickly attackers move laterally once any pod is compromised.  
 - “Make certs super short-lived everywhere.” You’ll DoS your own CA/identity plane and turn cert rotation into a constant incident.
 
@@ -116,7 +116,7 @@ Instead of “you’re allowed because you’re in this building (subnet),” it
 3) **The "Mental Model" (A simple analogy).**  
 SSRF is convincing a receptionist to fetch documents on your behalf. The metadata endpoint is the locked server room—your receptionist should never be able to enter it, even if tricked.
 
-4) **The "L4 Trap" (Common junior mistake + why it fails at scale).**
+4) **The "Common Trap" (Common junior mistake + why it fails at scale).**
 - “Blacklist `169.254.169.254` with a regex.” Security-only thinking ignores redirects, DNS rebinding, IPv6, and proxy paths—attackers bypass it.  
 - “Just require IMDSv2 and call it solved.” It reduces risk but doesn’t eliminate SSRF-driven credential theft by itself.
 
@@ -169,7 +169,7 @@ SSRF is convincing a receptionist to fetch documents on your behalf. The metadat
 3) **The "Mental Model" (A simple analogy).**  
 Provenance is a tamper-evident receipt: “This artifact came from commit X, built by builder Y, with dependencies Z.” Deploy-time verification is the bouncer checking the receipt before letting the artifact into production.
 
-4) **The "L4 Trap" (Common junior mistake + why it fails at scale).**
+4) **The "Common Trap" (Common junior mistake + why it fails at scale).**
 - “Have developers sign artifacts with PGP.” Security-only thinking ignores key theft and the fact you need *platform trust*, not human trust.  
 - “Just add an image scanner.” Scanners don’t stop a compromised builder from shipping malware *today*.
 

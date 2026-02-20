@@ -9,7 +9,7 @@
 3) **The "Mental Model" (A simple analogy).**  
 Good detections are like airport security: you’re not trying to recognize every bad actor’s face—you’re looking for *behavioral anomalies with context* (wrong place, wrong time, wrong tool). The goal is to stop the attacker’s “kill chain moves,” not to alert on every suspicious-looking passenger.
 
-4) **The "L4 Trap" (Common junior mistake + why it fails at scale).**
+4) **The "Common Trap" (Common junior mistake + why it fails at scale).**
 - “Alert on failed logins / 403s / exceptions.” Security-only thinking creates noise, not coverage; SOC drowns and misses real incidents.  
 - “Write detections directly in the SIEM UI.” It doesn’t version, test, review, or roll back like software—so it fails under churn.
 
@@ -62,7 +62,7 @@ Good detections are like airport security: you’re not trying to recognize ever
 3) **The "Mental Model" (A simple analogy).**  
 Crypto agility is changing a car engine while the car is doing 70 mph: you can’t stop the fleet, and not every driver upgrades at once. Hybrid crypto is like running **two engines in parallel** for a while so either one failing doesn’t crash the car.
 
-4) **The "L4 Trap" (Common junior mistake + why it fails at scale).**
+4) **The "Common Trap" (Common junior mistake + why it fails at scale).**
 - “We’ll wait until PQ is fully standardized everywhere.” Security-only thinking ignores that long-lived secrets can be recorded today.  
 - “Hardcode algorithms and key sizes in code.” You guarantee painful emergency migrations when primitives break or policies change.
 
@@ -115,7 +115,7 @@ Crypto agility is changing a car engine while the car is doing 70 mph: you can�
 3) **The "Mental Model" (A simple analogy).**  
 You put a letter in an envelope (DEK encrypts data), then put the envelope in a safe (KEK encrypts the DEK). When you change the safe’s combination (rotate KEK), you don’t rewrite every letter—you just move the envelopes to the new safe.
 
-4) **The "L4 Trap" (Common junior mistake + why it fails at scale).**
+4) **The "Common Trap" (Common junior mistake + why it fails at scale).**
 - “Use one AES key for all data.” Security-only thinking makes rotation a petabyte rewrite and turns compromise into a company-ending event.  
 - “Call KMS decrypt for every read.” It tanks p99 latency, increases cost, and makes KMS a global availability dependency.
 
@@ -167,7 +167,7 @@ You put a letter in an envelope (DEK encrypts data), then put the envelope in a 
 3) **The "Mental Model" (A simple analogy).**  
 This is the two-person rule on a submarine: one person can start the process, but they can’t launch alone. JIT access is the key that only works for an hour; MPA is requiring a second key-turn from an independent operator.
 
-4) **The "L4 Trap" (Common junior mistake + why it fails at scale).**
+4) **The "Common Trap" (Common junior mistake + why it fails at scale).**
 - “We trust admins; background checks are enough.” Security-only thinking ignores account takeover, coercion, and human error at scale.  
 - “Require approvals for everything, always.” You’ll create an outage factory and a shadow-access culture (people bypass controls to get work done).
 

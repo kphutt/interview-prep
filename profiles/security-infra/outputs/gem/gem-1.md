@@ -26,7 +26,7 @@ Bearer tokens are cash: whoever holds it can spend it until it expires. Sender-c
 - Card issuer rules → policy: require sender-constraint for high-risk scopes (write/admin), allow bearer temporarily for low-risk read during migration with explicit sunset.
 - Adversary behavior: attacker with log access can replay bearer tokens cross-network; sender constraint blocks this *unless* private key/cert is also exfiltrated (assumption: OS keystore not compromised).
 
-## L4 Trap
+## Common Trap
 - Red flag: “Just shorten token TTL to 5 minutes” → fails because replay still works immediately; at scale it shifts load to the token mint/refresh path, increasing IdP QPS, cache churn, and outage blast radius; dev friction shows up as more auth-related flakes, retries, and higher on-call noise during IdP hiccups.
 - Red flag: “Mandate mTLS for all clients” → fails because public clients (SPAs/mobile) can’t reliably protect/manage X.509 client certs; partners behind TLS terminators can’t present stable client cert identity; operationally you create a cert-ops treadmill (issuance, renewal, revocation, expiry paging) and break long-lived app versions.
 - “Enforce binding inside each microservice” → fails because you get inconsistent interpretations of RFCs, inconsistent cache behavior, and inconsistent logging/privacy handling; reliability risk is fragmented rollouts and uneven fail-open/fail-closed behavior, producing hard-to-debug partial outages.
@@ -169,7 +169,7 @@ TTL is “waiting for the battery to die”: you accept access until the token�
 - The “extension cord across rooms” is cross-region replication and cache propagation; it introduces seconds of inconsistency you must quantify and accept (or tighten for privileged scopes).
 - Adversarial mapping: an attacker with a stolen refresh token can keep “recharging batteries” (minting new access tokens) unless revocation also blocks future refreshes, not just current access tokens.
 
-## L4 Trap
+## Common Trap
 - **Junior approach:** “Make access tokens 2 minutes and refresh constantly.” **Why it fails at scale:** pushes huge QPS to IdP/refresh endpoints and increases tail latency during spikes; you still have a window where a stolen access token is valid. **Friction/toil:** auth outages now impact every user every few minutes; on-call becomes dominated by refresh storms and rate-limit tuning.
 - **Junior approach:** “Add a DB/Redis lookup to check revocation on every request.” **Why it fails at scale:** turns a low-latency local verify into a network hop + shared-state dependency; increases p99 and creates a global bottleneck. **Friction/toil:** every microservice now depends on the auth store; partial outages create cascading failures and brittle client retries.
 - **Red flag:** “We’ll just introspect tokens centrally; security > latency.” **Why it fails at scale:** you’ve created a mandatory synchronous dependency and a single point of failure; availability/SLO becomes gated by the introspection service. **Friction/toil:** SRE pushback, frequent emergency exception requests, and pressure to bypass checks under incident conditions.

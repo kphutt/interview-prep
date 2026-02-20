@@ -39,7 +39,7 @@ For each episode output these 7 sections (keep each to 1-3 bullets):
 1) Title
 2) Hook
 3) Mental Model
-4) L4 Trap
+4) Common Trap
 5) Nitty Gritty
 6) Staff Pivot
 7) Scenario Challenge

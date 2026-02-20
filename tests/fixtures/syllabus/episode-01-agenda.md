@@ -7,7 +7,7 @@
 3) **The Mental Model**
 Cash (bearer) vs. credit card with PIN (sender-constrained).
 
-4) **The L4 Trap**
+4) **The Common Trap**
 - "Rotate tokens faster." Fails to stop immediate replay.
 
 5) **The Nitty Gritty**

@@ -8,7 +8,7 @@
 3) **The "Mental Model" (A simple analogy).**  
 Provenance is a tamper-evident receipt: “This artifact came from commit X, built by builder Y, with dependencies Z.” Deploy-time verification is the bouncer checking the receipt before letting the artifact into production.
 
-4) **The "L4 Trap" (Common junior mistake + why it fails at scale).**
+4) **The "Common Trap" (Common junior mistake + why it fails at scale).**
 - “Have developers sign artifacts with PGP.” Security-only thinking ignores key theft and the fact you need *platform trust*, not human trust.  
 - “Just add an image scanner.” Scanners don’t stop a compromised builder from shipping malware *today*.
 

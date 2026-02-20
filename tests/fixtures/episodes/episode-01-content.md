@@ -12,7 +12,7 @@ Bearer tokens are cash: possession is enough. Sender-constrained tokens are a ca
 - Cash = bearer JWT: leaked tokens are immediately usable.
 - Card + PIN = token + binding proof (cert thumbprint or signed JWT).
 
-## L4 Trap
+## Common Trap
 - "Shorten token TTL to 5 minutes" — replay still works immediately; increases IdP load.
 - "Mandate mTLS for all clients" — public clients can't manage X.509 certs.
 

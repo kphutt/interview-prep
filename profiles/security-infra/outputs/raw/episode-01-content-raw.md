@@ -22,7 +22,7 @@ Bearer tokens are cash: whoever holds it can spend it until it expires. Sender-c
 - Card issuer rules → policy: require sender-constraint for high-risk scopes (write/admin), allow bearer temporarily for low-risk read during migration with explicit sunset.
 - Adversary behavior: attacker with log access can replay bearer tokens cross-network; sender constraint blocks this *unless* private key/cert is also exfiltrated (assumption: OS keystore not compromised).
 
-## L4 Trap
+## Common Trap
 - Red flag: “Just shorten token TTL to 5 minutes” → fails because replay still works immediately; at scale it shifts load to the token mint/refresh path, increasing IdP QPS, cache churn, and outage blast radius; dev friction shows up as more auth-related flakes, retries, and higher on-call noise during IdP hiccups.
 - Red flag: “Mandate mTLS for all clients” → fails because public clients (SPAs/mobile) can’t reliably protect/manage X.509 client certs; partners behind TLS terminators can’t present stable client cert identity; operationally you create a cert-ops treadmill (issuance, renewal, revocation, expiry paging) and break long-lived app versions.
 - “Enforce binding inside each microservice” → fails because you get inconsistent interpretations of RFCs, inconsistent cache behavior, and inconsistent logging/privacy handling; reliability risk is fragmented rollouts and uneven fail-open/fail-closed behavior, producing hard-to-debug partial outages.

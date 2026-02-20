@@ -22,7 +22,7 @@ A passkey is a physical key that only fits one specific lock: the browser/OS enf
 - Failure/adversary mapping: if you broaden the “lock” too far (shared RP ID across many apps), a compromised subdomain can legitimately request assertions—this isn’t “phishing,” it’s **trust boundary abuse**, and it shows up as hard-to-explain ATOs.
 - Spare keys/locksmith is **fallback + recovery**: attackers will pivot there immediately; if it’s not rate-limited, observable, and tiered, you’ll trade phishing for recovery-fraud and on-call pain.
 
-## L4 Trap
+## Common Trap
 - Red flag: “Disable passwords immediately.” Fails at scale because device churn, legacy browsers, shared devices, and platform bugs create mass lockouts; recovery paths get hammered, support throughput collapses, and SLOs degrade due to retries and escalations.
 - Red flag: “Treat passkeys like just another 2FA checkbox.” Fails because you don’t actually raise assurance where it matters (sensitive actions), leaving the riskiest flows protected by the weakest factor; later retrofitting step-up enforcement creates breaking changes and cross-team friction.
 - Red flag: “Implement WebAuthn verification by copy/pasting sample code.” Fails because subtle origin/RP ID validation errors cause either silent auth bypasses or widespread false rejects; debugging becomes on-call toil across multiple products and environments.

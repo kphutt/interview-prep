@@ -33,7 +33,7 @@ Generate an agenda with EXACTLY these 7 components, in this order:
 - A concrete analogy that maps to the core architectural decision or trade-off.
 - Must help a candidate reason about the problem, not just remember it.
 
-### L4 Trap
+### Common Trap
 - 1–2 bullets.
 - What a junior engineer would do and why it fails at scale.
 - Must include why it creates developer friction / toil / reliability risk (not just "it's insecure").
@@ -73,7 +73,7 @@ QUALITY SELF-CHECK (run silently; revise until true)
 - I output ONLY the 7-section agenda, nothing else.
 - Every section has real protocols/claims/mechanisms from the source (not vague generalities).
 - The agenda includes RRK elements (ops, risk, influence) woven into existing sections.
-- L4 Trap calls out domain-only (vs. operational/business) thinking failure.
+- Common Trap calls out domain-only (vs. operational/business) thinking failure.
 - Scenario Challenge forces clarifying questions, assumptions, and a rollout + incident plan.
 - No section violates its length limits.
 - Tone is an internal technical briefing: no fluff, no marketing voice.

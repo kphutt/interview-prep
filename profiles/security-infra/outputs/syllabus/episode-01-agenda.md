@@ -8,7 +8,7 @@
 3) **The "Mental Model" (A simple analogy).**  
 Bearer tokens are cash: possession is enough. Sender-constrained tokens are a credit card that only works when presented with the right proof (a PIN / device key / certificate), so theft alone isn’t sufficient.
 
-4) **The "L4 Trap" (Common junior mistake + why it fails at scale).**
+4) **The "Common Trap" (Common junior mistake + why it fails at scale).**
 - “Just shorten token TTL to 5 minutes.” This reduces window size but doesn’t stop immediate replay, and it DDOS-es your IdP/token minting path.  
 - “Mandate mTLS for all clients.” Security-only thinking ignores that public clients (mobile/SPAs/partners) can’t reliably manage client certs.
 

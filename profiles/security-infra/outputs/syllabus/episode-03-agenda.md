@@ -8,7 +8,7 @@
 3) **The "Mental Model" (A simple analogy).**  
 A uniform isn’t identity; a badge is. In mobile OAuth, the “uniform” is the redirect URI—any app can wear it. Universal/App Links are the OS checking the badge (app signature bound to a domain) before handing over the redirect.
 
-4) **The "L4 Trap" (Common junior mistake + why it fails at scale).**
+4) **The "Common Trap" (Common junior mistake + why it fails at scale).**
 - “Use `myapp://callback` and hide a `client_secret` in the app.” Secrets in apps are extractable, and URL schemes are hijackable—security-only thinking ignores platform realities.  
 - “Use an embedded WebView for control.” It harms SSO, increases phishing surface, and breaks modern platform guidance.
 
