@@ -801,7 +801,7 @@ def cmd_content(client, force=False, episode=None):
     print("\n=== CONTENT GENERATION ===\n")
     if force: print("  (--force: regenerating all)\n")
     recover_agendas_from_raw()
-    gen = skip = warn = 0
+    gen = skip = warn = fail = 0
 
     eps_to_process = [episode] if episode is not None else ALL_EPS
     for ep in eps_to_process:
@@ -824,7 +824,7 @@ def cmd_content(client, force=False, episode=None):
         prompt = content_prompt(agenda_text)
         resp = call_llm(client, _content_instructions(), prompt, label=f"Episode {ep:02d}")
         if not resp:
-            print(f"  FAIL ep {ep:02d}"); continue
+            print(f"  FAIL ep {ep:02d}"); fail += 1; continue
 
         p = EPISODES_DIR / ep_file(ep, "content")
         p.write_text(resp, encoding="utf-8")
@@ -832,11 +832,13 @@ def cmd_content(client, force=False, episode=None):
         print(f"  saved ep {ep:02d} ({len(resp):,} chars)")
         gen += 1
 
-    print(f"\n=== CONTENT: {gen} generated, {skip} skipped ===\n")
+    print(f"\n=== CONTENT: {gen} generated, {skip} skipped, {fail} failed ===\n")
     if gen == 0 and warn > 0:
         print(f"  WARNING: {warn} episode(s) had no agenda.")
         print(f"  Run syllabus first: python3 prep.py syllabus --profile <name>\n")
-    return True
+    if fail > 0:
+        print(f"  WARNING: {fail} episode(s) failed. Re-run to retry.\n")
+    return fail == 0
 
 def cmd_package():
     print("\n=== PACKAGING ===\n")

@@ -36,10 +36,6 @@ The Gem interview coach reveals gaps during practice — topics where answers ar
 
 `call_llm` retries at 2/4/8s for all errors. OpenAI `RateLimitError` (429) can require minutes. Should read `Retry-After` header or use longer backoff for 429s.
 
-### Partial failure exit codes
-
-`cmd_content` returns `True` even when episodes fail. A 12/15 run looks identical to 15/15. Should surface the failure count and return a clear warning or non-zero exit.
-
 ## Tier 3 — Contributor/maintainer experience
 
 ### Globals refactor / PrepConfig class
@@ -85,3 +81,11 @@ Done. `cmd_validate()` checks API key, profile fields, adapted file markers, and
 ### ~~Smoketest `--force` in README~~ ✅
 
 Done. `cmd_all` detects a fully-complete pipeline and tells the user to re-run with `--force` instead of silently skipping. README snippet updated with `# add --force to re-run` comment.
+
+### ~~Partial failure exit codes~~ ✅
+
+Done. `cmd_content` now tracks failures, prints the count in the summary line, and returns `False` when any episode fails.
+
+### ~~Remove `prep-backup.py`~~ ✅
+
+Not needed — file exists locally but is already gitignored by `*-backup.py` and not tracked.

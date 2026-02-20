@@ -430,6 +430,55 @@ class TestSkipLogic(unittest.TestCase):
 
         client.responses.create.assert_called_once()
 
+    def test_content_returns_false_on_failure(self):
+        """cmd_content should return False when episodes fail."""
+        (prep.SYLLABUS_DIR / "episode-01-agenda.md").write_text("agenda text " * 50, encoding="utf-8")
+
+        # LLM returns failure
+        mock_resp = MagicMock()
+        mock_resp.status = "failed"
+        mock_resp.error = "test failure"
+
+        client = MagicMock()
+        client.responses.create.return_value = mock_resp
+
+        orig_all = prep.ALL_EPS
+        prep.ALL_EPS = [1]
+        buf = io.StringIO()
+        try:
+            with contextlib.redirect_stdout(buf):
+                with patch('prep.time') as mock_time:
+                    mock_time.sleep = MagicMock()
+                    mock_time.time = MagicMock(return_value=0)
+                    result = prep.cmd_content(client, force=True)
+        finally:
+            prep.ALL_EPS = orig_all
+        self.assertFalse(result)
+        self.assertIn("1 failed", buf.getvalue())
+
+    def test_content_returns_true_on_success(self):
+        """cmd_content should return True when all episodes succeed."""
+        (prep.SYLLABUS_DIR / "episode-01-agenda.md").write_text("agenda text " * 50, encoding="utf-8")
+
+        mock_resp = MagicMock()
+        mock_resp.status = "completed"
+        mock_resp.output_text = "Generated content " * 100
+        mock_resp.usage = None
+
+        client = MagicMock()
+        client.responses.create.return_value = mock_resp
+
+        orig_all = prep.ALL_EPS
+        prep.ALL_EPS = [1]
+        buf = io.StringIO()
+        try:
+            with contextlib.redirect_stdout(buf):
+                result = prep.cmd_content(client, force=True)
+        finally:
+            prep.ALL_EPS = orig_all
+        self.assertTrue(result)
+        self.assertIn("0 failed", buf.getvalue())
+
 
 class TestPackaging(unittest.TestCase):
     def setUp(self):
