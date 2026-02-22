@@ -1575,18 +1575,18 @@ class TestParameterizedPrompts(unittest.TestCase):
         result = prep.syllabus_prompt(run)
         self.assertNotIn("Staff Security Engineer (L6) at Google", result)
 
-    def test_syllabus_prompt_injects_adapted_seeds(self):
-        """When adapted content is loaded, seeds should appear in prompt."""
-        orig_adapted = prep._ADAPTED.copy()
+    def test_syllabus_prompt_injects_domain_seeds(self):
+        """When domain content is loaded, seeds should appear in prompt."""
+        orig_domain = prep._DOMAIN.copy()
         try:
-            prep._ADAPTED = {"DOMAIN_SEEDS": "Episode 1: mTLS handshake\nEpisode 2: DPoP proofs"}
+            prep._DOMAIN = {"DOMAIN_SEEDS": "Episode 1: mTLS handshake\nEpisode 2: DPoP proofs"}
             run = dict(mode="SCAFFOLD", core="", frontier="")
             result = prep.syllabus_prompt(run)
             self.assertIn("mTLS", result)
             self.assertIn("DPoP", result)
             self.assertNotIn("{DOMAIN_SEEDS}", result)
         finally:
-            prep._ADAPTED = orig_adapted
+            prep._DOMAIN = orig_domain
 
     def test_syllabus_prompt_still_has_mode(self):
         """Existing format vars should still work."""
@@ -2246,12 +2246,12 @@ class _ProfileTestMixin:
         self._profile_saved = {}
         for attr in self._PROFILE_DIR_ATTRS + self._PROFILE_CFG_ATTRS + self._PROFILE_COUNT_ATTRS:
             self._profile_saved[attr] = getattr(prep, attr)
-        self._saved_adapted = prep._ADAPTED.copy()
+        self._saved_domain = prep._DOMAIN.copy()
 
     def _restore_profile_state(self):
         for attr, val in self._profile_saved.items():
             setattr(prep, attr, val)
-        prep._ADAPTED = self._saved_adapted
+        prep._DOMAIN = self._saved_domain
 
     def _write_profile(self, name, content, base=None):
         base = base or self.tmpdir
@@ -2259,12 +2259,12 @@ class _ProfileTestMixin:
         d.mkdir(parents=True, exist_ok=True)
         (d / "profile.md").write_text(content, encoding="utf-8")
 
-    def _write_adapted(self, name, adapted_files, base=None):
-        """Write adapted/ files for a profile. adapted_files: dict of fname->content."""
+    def _write_domain(self, name, domain_files, base=None):
+        """Write domain/ files for a profile. domain_files: dict of fname->content."""
         base = base or self.tmpdir
-        d = Path(base) / "profiles" / name / "adapted"
+        d = Path(base) / "profiles" / name / "domain"
         d.mkdir(parents=True, exist_ok=True)
-        for fname, content in adapted_files.items():
+        for fname, content in domain_files.items():
             (d / fname).write_text(content, encoding="utf-8")
 
 
@@ -2325,6 +2325,11 @@ class TestLoadProfile(unittest.TestCase):
         self._write_profile("test", "---\nrole: SWE\ncompany: Co\ndomain: D\nfrontier_episodes: -1\n---\n")
         with self.assertRaises(SystemExit):
             prep.load_profile("test")
+
+    def test_frontier_episodes_zero_is_valid(self):
+        self._write_profile("test", "---\nrole: SWE\ncompany: Co\ndomain: D\nfrontier_episodes: 0\n---\n")
+        cfg = prep.load_profile("test")
+        self.assertEqual(cfg["frontier_episodes"], 0)
 
     def test_required_field_missing(self):
         self._write_profile("test", "---\nrole: SWE\ncompany: Co\n---\n")  # missing domain
@@ -2446,7 +2451,7 @@ class TestCostEstimates(unittest.TestCase):
         """Cost confirmation declining should prevent any API command from running."""
         mock_client.return_value = MagicMock()
         tmpdir = tempfile.mkdtemp()
-        # Save ALL profile state (set_profile changes dirs, config, adapted, counts)
+        # Save ALL profile state (set_profile changes dirs, config, domain, counts)
         saved = {}
         _all_attrs = (
             _ProfileTestMixin._PROFILE_DIR_ATTRS
@@ -2456,20 +2461,20 @@ class TestCostEstimates(unittest.TestCase):
         for attr in _all_attrs:
             saved[attr] = getattr(prep, attr)
         orig_base = prep.BASE_DIR
-        orig_adapted = prep._ADAPTED.copy()
+        orig_domain = prep._DOMAIN.copy()
         try:
             prep.BASE_DIR = Path(tmpdir)
-            # Create a valid profile with non-stub adapted files
+            # Create a valid profile with non-stub domain files
             profile_dir = Path(tmpdir) / "profiles" / "testcost"
             for sub in ["inputs/agendas", "inputs/episodes", "inputs/misc",
                         "outputs/syllabus", "outputs/episodes", "outputs/gem",
-                        "outputs/notebooklm", "outputs/raw", "adapted"]:
+                        "outputs/notebooklm", "outputs/raw", "domain"]:
                 (profile_dir / sub).mkdir(parents=True, exist_ok=True)
             (profile_dir / "profile.md").write_text(
                 "---\nrole: Tester\ncompany: TestCo\ndomain: Testing\n---\n",
                 encoding="utf-8")
             for fname in ["seeds.md", "coverage.md", "lenses.md", "gem-sections.md"]:
-                (profile_dir / "adapted" / fname).write_text(
+                (profile_dir / "domain" / fname).write_text(
                     f"<!-- PLACEHOLDER -->\nreal content\n", encoding="utf-8")
             with patch('sys.argv', ['prep.py', 'syllabus', '--profile', 'testcost']):
                 prep.main()
@@ -2477,7 +2482,7 @@ class TestCostEstimates(unittest.TestCase):
             mock_client.return_value.responses.create.assert_not_called()
         finally:
             prep.BASE_DIR = orig_base
-            prep._ADAPTED = orig_adapted
+            prep._DOMAIN = orig_domain
             for attr, val in saved.items():
                 setattr(prep, attr, val)
             shutil.rmtree(tmpdir)
@@ -2555,7 +2560,7 @@ class TestEnhancedStatus(_ProfileTestMixin, unittest.TestCase):
         self.assertIn("3/15 agendas", output)
 
     def test_next_command_printed(self):
-        """Pipeline should suggest next command."""
+        """Pipeline should suggest next command (adapt when domain files missing)."""
         self._write_profile("myprep", "---\nrole: SWE\ncompany: Acme\ndomain: D\n---\n")
         prep.set_profile("myprep")
         prep.ensure_dirs()
@@ -2566,11 +2571,17 @@ class TestEnhancedStatus(_ProfileTestMixin, unittest.TestCase):
             prep.cmd_status(profile_name="myprep")
         output = f.getvalue()
         self.assertIn("Next:", output)
-        self.assertIn("syllabus", output)
+        self.assertIn("adapt", output)
 
     def test_pipeline_complete(self):
         """All stages done should show 'Pipeline complete!'."""
         self._write_profile("myprep", "---\nrole: SWE\ncompany: Acme\ndomain: D\n---\n")
+        self._write_domain("myprep", {
+            "seeds.md": "<!-- DOMAIN_SEEDS -->\nReal",
+            "coverage.md": "<!-- COVERAGE_FRAMEWORK -->\nReal",
+            "lenses.md": "<!-- DOMAIN_LENS -->\nReal",
+            "gem-sections.md": "<!-- GEM_BOOKSHELF -->\nReal",
+        })
         prep.set_profile("myprep")
         prep.ensure_dirs()
         for ep in prep.ALL_EPS:
@@ -2960,40 +2971,40 @@ class TestMigration(unittest.TestCase):
         self.assertEqual(len(episodes), 0, "Top-level outputs/ should not contain episode content")
 
 
-class TestParseAdaptedSections(unittest.TestCase):
-    """Test _parse_adapted_sections parser."""
+class TestParseDomainSections(unittest.TestCase):
+    """Test _parse_domain_sections parser."""
 
     def test_single_section(self):
         text = "<!-- FOO -->\nsome content\nmore content"
-        result = prep._parse_adapted_sections(text)
+        result = prep._parse_domain_sections(text)
         self.assertEqual(result, {"FOO": "some content\nmore content"})
 
     def test_multiple_sections(self):
         text = "<!-- A -->\nalpha\n<!-- B -->\nbeta\nbeta2"
-        result = prep._parse_adapted_sections(text)
+        result = prep._parse_domain_sections(text)
         self.assertEqual(result["A"], "alpha")
         self.assertEqual(result["B"], "beta\nbeta2")
 
     def test_empty_section(self):
         text = "<!-- A -->\n<!-- B -->\ncontent"
-        result = prep._parse_adapted_sections(text)
+        result = prep._parse_domain_sections(text)
         self.assertEqual(result["A"], "")
         self.assertEqual(result["B"], "content")
 
     def test_no_markers(self):
         text = "just plain text\nno markers here"
-        result = prep._parse_adapted_sections(text)
+        result = prep._parse_domain_sections(text)
         self.assertEqual(result, {})
 
     def test_content_with_braces(self):
-        """Adapted content may contain {json} that shouldn't break anything."""
+        """Domain content may contain {json} that shouldn't break anything."""
         text = '<!-- X -->\n{"key": "value"}\nmore {stuff}'
-        result = prep._parse_adapted_sections(text)
+        result = prep._parse_domain_sections(text)
         self.assertIn('{"key": "value"}', result["X"])
 
 
-class TestInjectAdapted(_ProfileTestMixin, unittest.TestCase):
-    """Test adapted file loading and injection into prompts."""
+class TestInjectDomain(_ProfileTestMixin, unittest.TestCase):
+    """Test domain file loading and injection into prompts."""
 
     def setUp(self):
         self.tmpdir = tempfile.mkdtemp()
@@ -3006,75 +3017,75 @@ class TestInjectAdapted(_ProfileTestMixin, unittest.TestCase):
         self._restore_profile_state()
         shutil.rmtree(self.tmpdir)
 
-    def test_load_adapted_reads_sections(self):
-        """_load_adapted should parse all adapted files and merge markers."""
+    def test_load_domain_reads_sections(self):
+        """_load_domain should parse all domain files and merge markers."""
         self._write_profile("test", "---\nrole: R\ncompany: C\ndomain: D\n---\n")
-        self._write_adapted("test", {
+        self._write_domain("test", {
             "seeds.md": "<!-- DOMAIN_SEEDS -->\nEpisode 1: Widgets",
             "coverage.md": "<!-- COVERAGE_FRAMEWORK -->\nWidget Coverage Map",
         })
-        result = prep._load_adapted("test")
+        result = prep._load_domain("test")
         self.assertEqual(result["DOMAIN_SEEDS"], "Episode 1: Widgets")
         self.assertEqual(result["COVERAGE_FRAMEWORK"], "Widget Coverage Map")
 
-    def test_inject_adapted_replaces_markers(self):
-        """_inject_adapted should replace {MARKER} placeholders."""
-        adapted = {"FOO": "replaced-foo", "BAR": "replaced-bar"}
+    def test_inject_domain_replaces_markers(self):
+        """_inject_domain should replace {MARKER} placeholders."""
+        domain = {"FOO": "replaced-foo", "BAR": "replaced-bar"}
         text = "prefix {FOO} middle {BAR} suffix"
-        result = prep._inject_adapted(text, adapted)
+        result = prep._inject_domain(text, domain)
         self.assertEqual(result, "prefix replaced-foo middle replaced-bar suffix")
 
-    def test_inject_adapted_uses_global(self):
-        """Without explicit dict, _inject_adapted uses _ADAPTED global."""
-        orig = prep._ADAPTED.copy()
+    def test_inject_domain_uses_global(self):
+        """Without explicit dict, _inject_domain uses _DOMAIN global."""
+        orig = prep._DOMAIN.copy()
         try:
-            prep._ADAPTED = {"MARKER": "global-val"}
-            result = prep._inject_adapted("test {MARKER} end")
+            prep._DOMAIN = {"MARKER": "global-val"}
+            result = prep._inject_domain("test {MARKER} end")
             self.assertEqual(result, "test global-val end")
         finally:
-            prep._ADAPTED = orig
+            prep._DOMAIN = orig
 
     def test_inject_missing_marker_leaves_placeholder(self):
-        """If adapted doesn't have a marker, placeholder stays in text."""
-        result = prep._inject_adapted("test {UNKNOWN_MARKER} end", {})
+        """If domain doesn't have a marker, placeholder stays in text."""
+        result = prep._inject_domain("test {UNKNOWN_MARKER} end", {})
         self.assertEqual(result, "test {UNKNOWN_MARKER} end")
 
-    def test_load_adapted_warns_on_no_sections(self):
+    def test_load_domain_warns_on_no_sections(self):
         """Files without markers should trigger a warning."""
         self._write_profile("test", "---\nrole: R\ncompany: C\ndomain: D\n---\n")
-        self._write_adapted("test", {"bad.md": "no markers here"})
+        self._write_domain("test", {"bad.md": "no markers here"})
         import io
         captured = io.StringIO()
         import contextlib
         with contextlib.redirect_stdout(captured):
-            prep._load_adapted("test")
+            prep._load_domain("test")
         self.assertIn("WARNING", captured.getvalue())
 
-    def test_load_adapted_empty_dir(self):
-        """Empty adapted dir returns empty dict."""
+    def test_load_domain_empty_dir(self):
+        """Empty domain dir returns empty dict."""
         self._write_profile("test", "---\nrole: R\ncompany: C\ndomain: D\n---\n")
-        (Path(self.tmpdir) / "profiles" / "test" / "adapted").mkdir(parents=True, exist_ok=True)
-        result = prep._load_adapted("test")
+        (Path(self.tmpdir) / "profiles" / "test" / "domain").mkdir(parents=True, exist_ok=True)
+        result = prep._load_domain("test")
         self.assertEqual(result, {})
 
-    def test_load_adapted_no_dir(self):
-        """Missing adapted dir returns empty dict."""
+    def test_load_domain_no_dir(self):
+        """Missing domain dir returns empty dict."""
         self._write_profile("test", "---\nrole: R\ncompany: C\ndomain: D\n---\n")
-        result = prep._load_adapted("test")
+        result = prep._load_domain("test")
         self.assertEqual(result, {})
 
     def test_brace_content_not_double_replaced(self):
-        """Adapted content with {braces} shouldn't be treated as markers."""
-        adapted = {"FOO": 'config: {"nested": true}'}
+        """Domain content with {braces} shouldn't be treated as markers."""
+        domain = {"FOO": 'config: {"nested": true}'}
         text = "pre {FOO} post"
-        result = prep._inject_adapted(text, adapted)
+        result = prep._inject_domain(text, domain)
         self.assertIn('{"nested": true}', result)
 
-    def test_syllabus_prompt_with_adapted(self):
-        """syllabus_prompt should inject adapted seeds into output."""
-        orig = prep._ADAPTED.copy()
+    def test_syllabus_prompt_with_domain(self):
+        """syllabus_prompt should inject domain seeds into output."""
+        orig = prep._DOMAIN.copy()
         try:
-            prep._ADAPTED = {
+            prep._DOMAIN = {
                 "DOMAIN_SEEDS": "Episode 1: Test Topic Seeds",
                 "COVERAGE_FRAMEWORK": "Test Coverage Framework",
                 "DOMAIN_LENS": "test domain lens",
@@ -3086,13 +3097,13 @@ class TestInjectAdapted(_ProfileTestMixin, unittest.TestCase):
             self.assertNotIn("{DOMAIN_SEEDS}", result)
             self.assertNotIn("{COVERAGE_FRAMEWORK}", result)
         finally:
-            prep._ADAPTED = orig
+            prep._DOMAIN = orig
 
-    def test_content_prompt_with_adapted(self):
-        """content_prompt should inject adapted lenses into output."""
-        orig = prep._ADAPTED.copy()
+    def test_content_prompt_with_domain(self):
+        """content_prompt should inject domain lenses into output."""
+        orig = prep._DOMAIN.copy()
         try:
-            prep._ADAPTED = {
+            prep._DOMAIN = {
                 "DOMAIN_LENS": "data engineering lens",
                 "NITTY_GRITTY_LAYOUT": "DE layout here",
                 "DOMAIN_REQUIREMENTS": "DE requirements here",
@@ -3105,7 +3116,7 @@ class TestInjectAdapted(_ProfileTestMixin, unittest.TestCase):
             self.assertIn("Data, Product, Platform", result)
             self.assertNotIn("{DOMAIN_LENS}", result)
         finally:
-            prep._ADAPTED = orig
+            prep._DOMAIN = orig
 
 
 class TestIsStub(unittest.TestCase):
@@ -3150,48 +3161,48 @@ class TestPreflightCheck(_ProfileTestMixin, unittest.TestCase):
         self._restore_profile_state()
         shutil.rmtree(self.tmpdir)
 
-    def _setup_profile_with_adapted(self, name, stub=False):
-        """Helper: create profile with adapted files (real or stub)."""
+    def _setup_profile_with_domain(self, name, stub=False):
+        """Helper: create profile with domain files (real or stub)."""
         self._write_profile(name, "---\nrole: R\ncompany: C\ndomain: D\n---\n")
         if stub:
-            self._write_adapted(name, {
+            self._write_domain(name, {
                 "seeds.md": "<!-- STUB: placeholder -->\n",
                 "coverage.md": "<!-- STUB: placeholder -->\n",
                 "lenses.md": "<!-- STUB: placeholder -->\n",
                 "gem-sections.md": "<!-- STUB: placeholder -->\n",
             })
         else:
-            self._write_adapted(name, {
+            self._write_domain(name, {
                 "seeds.md": "<!-- DOMAIN_SEEDS -->\nEpisode 1: Real",
                 "coverage.md": "<!-- COVERAGE_FRAMEWORK -->\nReal",
                 "lenses.md": "<!-- DOMAIN_LENS -->\nReal",
                 "gem-sections.md": "<!-- GEM_BOOKSHELF -->\nReal",
             })
 
-    def test_preflight_passes_with_real_adapted(self):
-        """Preflight should succeed with non-stub adapted files."""
-        self._setup_profile_with_adapted("good", stub=False)
+    def test_preflight_passes_with_real_domain(self):
+        """Preflight should succeed with non-stub domain files."""
+        self._setup_profile_with_domain("good", stub=False)
         # Should not raise
         prep._preflight_check("good", "syllabus")
 
-    def test_preflight_catches_stub_adapted(self):
-        """Preflight should error on stub adapted files."""
-        self._setup_profile_with_adapted("bad", stub=True)
+    def test_preflight_catches_stub_domain(self):
+        """Preflight should error on stub domain files."""
+        self._setup_profile_with_domain("bad", stub=True)
         with self.assertRaises(SystemExit) as cm:
             prep._preflight_check("bad", "syllabus")
         self.assertEqual(cm.exception.code, 1)
 
-    def test_preflight_catches_missing_adapted(self):
-        """Preflight should error when adapted files are missing entirely."""
+    def test_preflight_catches_missing_domain(self):
+        """Preflight should error when domain files are missing entirely."""
         self._write_profile("noadapt", "---\nrole: R\ncompany: C\ndomain: D\n---\n")
-        (Path(self.tmpdir) / "profiles" / "noadapt" / "adapted").mkdir(parents=True, exist_ok=True)
+        (Path(self.tmpdir) / "profiles" / "noadapt" / "domain").mkdir(parents=True, exist_ok=True)
         with self.assertRaises(SystemExit):
             prep._preflight_check("noadapt", "syllabus")
 
     @patch('prep.get_client')
     def test_preflight_runs_before_client(self, mock_get_client):
-        """When adapted files are stubs, get_client should never be called."""
-        self._setup_profile_with_adapted("stubbed", stub=True)
+        """When domain files are stubs, get_client should never be called."""
+        self._setup_profile_with_domain("stubbed", stub=True)
         with self.assertRaises(SystemExit):
             with patch('sys.argv', ['prep.py', 'syllabus', '--profile', 'stubbed']):
                 prep.main()
@@ -3237,8 +3248,8 @@ class TestApiCommandsRequireProfile(unittest.TestCase):
                     "status should not require --profile")
 
 
-class TestInitCreatesAdaptedStubs(_ProfileTestMixin, unittest.TestCase):
-    """cmd_init should create adapted/ directory with stub files."""
+class TestInitCreatesDomainStubs(_ProfileTestMixin, unittest.TestCase):
+    """cmd_init should create domain/ directory with stub files."""
 
     def setUp(self):
         self.tmpdir = tempfile.mkdtemp()
@@ -3251,79 +3262,79 @@ class TestInitCreatesAdaptedStubs(_ProfileTestMixin, unittest.TestCase):
         self._restore_profile_state()
         shutil.rmtree(self.tmpdir)
 
-    def test_init_creates_adapted_dir(self):
+    def test_init_creates_domain_dir(self):
         prep.cmd_init("newprof")
-        adapted_dir = Path(self.tmpdir) / "profiles" / "newprof" / "adapted"
-        self.assertTrue(adapted_dir.is_dir())
+        domain_dir = Path(self.tmpdir) / "profiles" / "newprof" / "domain"
+        self.assertTrue(domain_dir.is_dir())
 
     def test_init_creates_four_stub_files(self):
         prep.cmd_init("newprof")
-        adapted_dir = Path(self.tmpdir) / "profiles" / "newprof" / "adapted"
+        domain_dir = Path(self.tmpdir) / "profiles" / "newprof" / "domain"
         expected = {"seeds.md", "coverage.md", "lenses.md", "gem-sections.md"}
-        actual = {f.name for f in adapted_dir.iterdir() if f.suffix == ".md"}
+        actual = {f.name for f in domain_dir.iterdir() if f.suffix == ".md"}
         self.assertEqual(actual, expected)
 
     def test_init_stubs_are_detected_as_stubs(self):
         prep.cmd_init("newprof")
-        adapted_dir = Path(self.tmpdir) / "profiles" / "newprof" / "adapted"
+        domain_dir = Path(self.tmpdir) / "profiles" / "newprof" / "domain"
         for fname in ["seeds.md", "coverage.md", "lenses.md", "gem-sections.md"]:
-            self.assertTrue(prep._is_stub(adapted_dir / fname),
+            self.assertTrue(prep._is_stub(domain_dir / fname),
                 f"{fname} should be detected as stub")
 
     def test_init_stubs_contain_guidance(self):
         prep.cmd_init("newprof")
-        adapted_dir = Path(self.tmpdir) / "profiles" / "newprof" / "adapted"
+        domain_dir = Path(self.tmpdir) / "profiles" / "newprof" / "domain"
         for fname in ["seeds.md", "coverage.md", "lenses.md", "gem-sections.md"]:
-            text = (adapted_dir / fname).read_text(encoding="utf-8")
+            text = (domain_dir / fname).read_text(encoding="utf-8")
             self.assertIn("intake.md", text, f"{fname} should reference intake.md")
 
 
-class TestSecurityInfraAdapted(unittest.TestCase):
-    """Reference profile should have complete adapted files."""
+class TestSecurityInfraDomain(unittest.TestCase):
+    """Reference profile should have complete domain files."""
 
-    _ADAPTED_DIR = Path(__file__).parent / "profiles" / "security-infra" / "adapted"
+    _DOMAIN_DIR = Path(__file__).parent / "profiles" / "security-infra" / "domain"
 
     @unittest.skipUnless(
-        (Path(__file__).parent / "profiles" / "security-infra" / "adapted").exists(),
-        "Security-infra adapted/ not available"
+        (Path(__file__).parent / "profiles" / "security-infra" / "domain").exists(),
+        "Security-infra domain/ not available"
     )
     def test_all_four_files_exist(self):
         for fname in ["seeds.md", "coverage.md", "lenses.md", "gem-sections.md"]:
-            self.assertTrue((self._ADAPTED_DIR / fname).exists(), f"{fname} missing")
+            self.assertTrue((self._DOMAIN_DIR / fname).exists(), f"{fname} missing")
 
     @unittest.skipUnless(
-        (Path(__file__).parent / "profiles" / "security-infra" / "adapted").exists(),
-        "Security-infra adapted/ not available"
+        (Path(__file__).parent / "profiles" / "security-infra" / "domain").exists(),
+        "Security-infra domain/ not available"
     )
     def test_files_are_not_stubs(self):
         for fname in ["seeds.md", "coverage.md", "lenses.md", "gem-sections.md"]:
-            self.assertFalse(prep._is_stub(self._ADAPTED_DIR / fname),
+            self.assertFalse(prep._is_stub(self._DOMAIN_DIR / fname),
                 f"{fname} should not be a stub")
 
     @unittest.skipUnless(
-        (Path(__file__).parent / "profiles" / "security-infra" / "adapted").exists(),
-        "Security-infra adapted/ not available"
+        (Path(__file__).parent / "profiles" / "security-infra" / "domain").exists(),
+        "Security-infra domain/ not available"
     )
     def test_seeds_has_episodes(self):
         orig_base = prep.BASE_DIR
         try:
             prep.BASE_DIR = Path(__file__).parent
-            adapted = prep._load_adapted("security-infra")
-            self.assertIn("DOMAIN_SEEDS", adapted)
-            self.assertIn("Episode 1:", adapted["DOMAIN_SEEDS"])
+            domain = prep._load_domain("security-infra")
+            self.assertIn("DOMAIN_SEEDS", domain)
+            self.assertIn("Episode 1:", domain["DOMAIN_SEEDS"])
         finally:
             prep.BASE_DIR = orig_base
 
     @unittest.skipUnless(
-        (Path(__file__).parent / "profiles" / "security-infra" / "adapted").exists(),
-        "Security-infra adapted/ not available"
+        (Path(__file__).parent / "profiles" / "security-infra" / "domain").exists(),
+        "Security-infra domain/ not available"
     )
     def test_all_expected_markers_present(self):
-        """All markers referenced by prompts should be in the adapted content."""
+        """All markers referenced by prompts should be in the domain content."""
         orig_base = prep.BASE_DIR
         try:
             prep.BASE_DIR = Path(__file__).parent
-            adapted = prep._load_adapted("security-infra")
+            domain = prep._load_domain("security-infra")
             expected_markers = [
                 "DOMAIN_SEEDS", "COVERAGE_FRAMEWORK",
                 "DOMAIN_LENS", "NITTY_GRITTY_LAYOUT", "DOMAIN_REQUIREMENTS",
@@ -3331,13 +3342,13 @@ class TestSecurityInfraAdapted(unittest.TestCase):
                 "GEM_BOOKSHELF", "GEM_EXAMPLES", "GEM_CODING", "GEM_FORMAT_EXAMPLES",
             ]
             for m in expected_markers:
-                self.assertIn(m, adapted, f"Marker {m} not found in adapted content")
+                self.assertIn(m, domain, f"Marker {m} not found in domain content")
         finally:
             prep.BASE_DIR = orig_base
 
 
 class TestRenderWithProfileInjects(_ProfileTestMixin, unittest.TestCase):
-    """render_template should inject adapted content when profile is active."""
+    """render_template should inject domain content when profile is active."""
 
     def setUp(self):
         self.tmpdir = tempfile.mkdtemp()
@@ -3350,121 +3361,32 @@ class TestRenderWithProfileInjects(_ProfileTestMixin, unittest.TestCase):
         self._restore_profile_state()
         shutil.rmtree(self.tmpdir)
 
-    def test_render_injects_adapted(self):
-        prep._ADAPTED = {"FOO_MARKER": "injected-value"}
+    def test_render_injects_domain(self):
+        prep._DOMAIN = {"FOO_MARKER": "injected-value"}
         template = "prefix {FOO_MARKER} suffix"
         result = prep.render_template(template)
         self.assertIn("injected-value", result)
         self.assertNotIn("{FOO_MARKER}", result)
 
-    def test_render_injects_role_and_adapted(self):
-        prep._ADAPTED = {"DOMAIN_LENS": "test lens value"}
+    def test_render_injects_role_and_domain(self):
+        prep._DOMAIN = {"DOMAIN_LENS": "test lens value"}
         template = "role={PREP_ROLE} lens={DOMAIN_LENS}"
         result = prep.render_template(template)
         self.assertIn(prep.ROLE, result)
         self.assertIn("test lens value", result)
 
 
-class TestParseSetupResponse(unittest.TestCase):
-    """Test _parse_setup_response delimiter parsing."""
-
-    def test_all_four_files(self):
-        text = (
-            "=== FILE: seeds.md ===\n"
-            "<!-- DOMAIN_SEEDS -->\nEpisode 1: Test\n\n"
-            "=== FILE: coverage.md ===\n"
-            "<!-- COVERAGE_FRAMEWORK -->\nTest coverage\n\n"
-            "=== FILE: lenses.md ===\n"
-            "<!-- DOMAIN_LENS -->\nTest lens\n\n"
-            "=== FILE: gem-sections.md ===\n"
-            "<!-- GEM_BOOKSHELF -->\nTest bookshelf"
-        )
-        result = prep._parse_setup_response(text)
-        self.assertEqual(len(result), 4)
-        self.assertIn("seeds.md", result)
-        self.assertIn("coverage.md", result)
-        self.assertIn("lenses.md", result)
-        self.assertIn("gem-sections.md", result)
-        self.assertIn("DOMAIN_SEEDS", result["seeds.md"])
-
-    def test_partial_response(self):
-        text = (
-            "=== FILE: seeds.md ===\n"
-            "<!-- DOMAIN_SEEDS -->\nContent here\n\n"
-            "=== FILE: coverage.md ===\n"
-            "<!-- COVERAGE_FRAMEWORK -->\nCoverage here"
-        )
-        result = prep._parse_setup_response(text)
-        self.assertEqual(len(result), 2)
-        self.assertIn("seeds.md", result)
-        self.assertIn("coverage.md", result)
-
-    def test_empty_response(self):
-        result = prep._parse_setup_response("")
-        self.assertEqual(result, {})
-
-    def test_no_delimiters(self):
-        result = prep._parse_setup_response("Just some text without delimiters")
-        self.assertEqual(result, {})
-
-    def test_whitespace_handling(self):
-        text = (
-            "Preamble text to ignore\n\n"
-            "=== FILE: seeds.md ===\n"
-            "\n  <!-- DOMAIN_SEEDS -->\nContent\n\n"
-            "=== FILE: coverage.md ===\n"
-            "  <!-- COVERAGE_FRAMEWORK -->\nCoverage  \n"
-        )
-        result = prep._parse_setup_response(text)
-        self.assertEqual(len(result), 2)
-        # Content should be stripped
-        self.assertIn("DOMAIN_SEEDS", result["seeds.md"])
-
-    def test_content_with_braces(self):
-        text = (
-            '=== FILE: seeds.md ===\n'
-            '<!-- DOMAIN_SEEDS -->\n{"key": "value"}\n'
-        )
-        result = prep._parse_setup_response(text)
-        self.assertIn('{"key": "value"}', result["seeds.md"])
-
-
-class TestCmdSetup(_ProfileTestMixin, unittest.TestCase):
-    """Test cmd_setup LLM integration."""
-
-    _SETUP_RESPONSE = (
-        "=== FILE: seeds.md ===\n"
-        "<!-- DOMAIN_SEEDS -->\nUse the following 12 examples.\n\n"
-        "### Episode 1: Test Topic\n**Focus:** Testing\n\n"
-        "=== FILE: coverage.md ===\n"
-        "<!-- COVERAGE_FRAMEWORK -->\nTest Coverage Map\n\n"
-        "=== FILE: lenses.md ===\n"
-        "<!-- DOMAIN_LENS -->\ntest mechanisms\n\n"
-        "<!-- NITTY_GRITTY_LAYOUT -->\n1) **Test Details**\n\n"
-        "<!-- DOMAIN_REQUIREMENTS -->\n- Include test details.\n\n"
-        "<!-- DISTILL_REQUIREMENTS -->\n- 2 test details\n\n"
-        "<!-- STAKEHOLDERS -->\nTest, Product, Platform\n\n"
-        "=== FILE: gem-sections.md ===\n"
-        "<!-- GEM_BOOKSHELF -->\nTest bookshelf\n\n"
-        "<!-- GEM_EXAMPLES -->\n> Domain: \"test question\"\n\n"
-        "<!-- GEM_CODING -->\nTest coding\n\n"
-        "<!-- GEM_FORMAT_EXAMPLES -->\nFeb 10|Interview|Test|Concept|Owned|Detail|Locked"
-    )
+class TestCmdAdapt(_ProfileTestMixin, unittest.TestCase):
+    """Test cmd_adapt domain file generation."""
 
     def setUp(self):
         self.tmpdir = tempfile.mkdtemp()
         self._save_profile_state()
         self._orig_base = prep.BASE_DIR
         prep.BASE_DIR = Path(self.tmpdir)
-        # Create a valid profile
-        self._write_profile("testsetup", "---\nrole: SWE\ncompany: TestCo\ndomain: Testing\n---\n\n## Notes\nTest profile.\n")
-        self._write_adapted("testsetup", {
-            "seeds.md": "<!-- STUB: placeholder -->\n",
-            "coverage.md": "<!-- STUB: placeholder -->\n",
-            "lenses.md": "<!-- STUB: placeholder -->\n",
-            "gem-sections.md": "<!-- STUB: placeholder -->\n",
-        })
-        prep.set_profile("testsetup")
+        # Create a profile
+        self._write_profile("test", "---\nrole: SWE\ncompany: Acme\ndomain: Testing\n---\n")
+        prep.set_profile("test")
         prep.ensure_dirs()
 
     def tearDown(self):
@@ -3472,508 +3394,192 @@ class TestCmdSetup(_ProfileTestMixin, unittest.TestCase):
         self._restore_profile_state()
         shutil.rmtree(self.tmpdir)
 
-    def test_writes_four_files(self):
-        mock_resp = MagicMock()
-        mock_resp.status = "completed"
-        mock_resp.output_text = self._SETUP_RESPONSE
-        mock_resp.usage = None
+    def _mock_client(self, responses):
+        """Create a mock client that returns given responses in sequence."""
         client = MagicMock()
-        client.responses.create.return_value = mock_resp
+        side_effects = []
+        for text in responses:
+            resp = MagicMock(status="completed", output_text=text, usage=None)
+            side_effects.append(resp)
+        client.responses.create.side_effect = side_effects
+        return client
 
-        result = prep.cmd_setup(client, "testsetup")
+    def _seeds_response(self):
+        return (
+            "<!-- DOMAIN_SEEDS -->\n"
+            "### Episode 1: Test Topic\n"
+            "**Focus:** Testing focus\n\n"
+            "<!-- COVERAGE_FRAMEWORK -->\n"
+            "Test Coverage Map\n| Ep | Domain |\n| 1 | Testing |\n"
+        )
 
+    def _lenses_response(self):
+        return (
+            "<!-- DOMAIN_LENS -->\nTest depth means concrete test strategies\n\n"
+            "<!-- NITTY_GRITTY_LAYOUT -->\n1) **Test Architecture**\n2) **Test Data**\n\n"
+            "<!-- DOMAIN_REQUIREMENTS -->\n- Include test details\n\n"
+            "<!-- DISTILL_REQUIREMENTS -->\n- 2 test details\n\n"
+            "<!-- STAKEHOLDERS -->\nQA, Dev, Product\n"
+        )
+
+    def _gem_response(self):
+        return (
+            "<!-- GEM_BOOKSHELF -->\n| Layer | Concept | Role |\n| 1 | Unit | Fast feedback |\n\n"
+            "<!-- GEM_EXAMPLES -->\n> Domain: \"How do you test X?\"\n\n"
+            "<!-- GEM_CODING -->\nTest-flavored scripting\n\n"
+            "<!-- GEM_FORMAT_EXAMPLES -->\n2026-02|Interview|Testing|Unit|Owned|Good|Locked\n"
+        )
+
+    def test_adapt_creates_all_domain_files(self):
+        """All 4 domain files should be created with correct markers."""
+        client = self._mock_client([
+            self._seeds_response(),
+            self._lenses_response(),
+            self._gem_response(),
+        ])
+        result = prep.cmd_adapt(client, "test", force=True)
         self.assertTrue(result)
-        adapted_dir = Path(self.tmpdir) / "profiles" / "testsetup" / "adapted"
+        domain_dir = Path(self.tmpdir) / "profiles" / "test" / "domain"
         for fname in ["seeds.md", "coverage.md", "lenses.md", "gem-sections.md"]:
-            self.assertTrue((adapted_dir / fname).exists(), f"{fname} not written")
-            self.assertFalse(prep._is_stub(adapted_dir / fname), f"{fname} still a stub")
+            self.assertTrue((domain_dir / fname).exists(), f"{fname} should exist")
+            self.assertFalse(prep._is_stub(domain_dir / fname), f"{fname} should not be stub")
 
-    def test_skips_when_exist(self):
-        """Non-stub adapted files should cause skip without --force."""
-        adapted_dir = Path(self.tmpdir) / "profiles" / "testsetup" / "adapted"
-        for fname in ["seeds.md", "coverage.md", "lenses.md", "gem-sections.md"]:
-            (adapted_dir / fname).write_text("<!-- REAL -->\nReal content", encoding="utf-8")
-
+    def test_adapt_skips_when_files_exist(self):
+        """No API calls when non-stub domain files already present."""
+        self._write_domain("test", {
+            "seeds.md": "<!-- DOMAIN_SEEDS -->\nExisting",
+            "coverage.md": "<!-- COVERAGE_FRAMEWORK -->\nExisting",
+            "lenses.md": "<!-- DOMAIN_LENS -->\nExisting",
+            "gem-sections.md": "<!-- GEM_BOOKSHELF -->\nExisting",
+        })
         client = MagicMock()
-        result = prep.cmd_setup(client, "testsetup", force=False)
-
+        result = prep.cmd_adapt(client, "test", force=False)
         self.assertTrue(result)
         client.responses.create.assert_not_called()
 
-    def test_force_regenerates(self):
-        """--force should regenerate even when files exist."""
-        adapted_dir = Path(self.tmpdir) / "profiles" / "testsetup" / "adapted"
-        for fname in ["seeds.md", "coverage.md", "lenses.md", "gem-sections.md"]:
-            (adapted_dir / fname).write_text("<!-- OLD -->\nOld content", encoding="utf-8")
-
-        mock_resp = MagicMock()
-        mock_resp.status = "completed"
-        mock_resp.output_text = self._SETUP_RESPONSE
-        mock_resp.usage = None
-        client = MagicMock()
-        client.responses.create.return_value = mock_resp
-
-        result = prep.cmd_setup(client, "testsetup", force=True)
-
-        self.assertTrue(result)
-        client.responses.create.assert_called_once()
-        # Content should be updated
-        text = (adapted_dir / "seeds.md").read_text(encoding="utf-8")
-        self.assertIn("DOMAIN_SEEDS", text)
-
-    def test_saves_raw(self):
-        mock_resp = MagicMock()
-        mock_resp.status = "completed"
-        mock_resp.output_text = self._SETUP_RESPONSE
-        mock_resp.usage = None
-        client = MagicMock()
-        client.responses.create.return_value = mock_resp
-
-        prep.cmd_setup(client, "testsetup")
-
-        raw = prep.RAW_DIR / "setup-raw.md"
-        self.assertTrue(raw.exists())
-        self.assertIn("FILE: seeds.md", raw.read_text(encoding="utf-8"))
-
-    def test_reloads_adapted(self):
-        """After writing, _ADAPTED global should contain new content."""
-        mock_resp = MagicMock()
-        mock_resp.status = "completed"
-        mock_resp.output_text = self._SETUP_RESPONSE
-        mock_resp.usage = None
-        client = MagicMock()
-        client.responses.create.return_value = mock_resp
-
-        # Adapted should be empty/stubs before
-        self.assertEqual(prep._ADAPTED.get("DOMAIN_SEEDS", ""), "")
-
-        prep.cmd_setup(client, "testsetup")
-
-        # After setup, _ADAPTED should have the new content
-        self.assertIn("DOMAIN_SEEDS", prep._ADAPTED)
-        self.assertIn("12 examples", prep._ADAPTED["DOMAIN_SEEDS"])
-
-    def test_llm_failure_returns_false(self):
-        mock_resp = MagicMock()
-        mock_resp.status = "failed"
-        mock_resp.error = "test failure"
-        client = MagicMock()
-        client.responses.create.return_value = mock_resp
-
-        with patch('prep.time') as mock_time:
-            mock_time.sleep = MagicMock()
-            mock_time.time = MagicMock(return_value=0)
-            result = prep.cmd_setup(client, "testsetup")
-
-        self.assertFalse(result)
-
-
-class TestSetupPrompt(unittest.TestCase):
-    """Test setup_prompt renders correctly."""
-
-    def test_contains_role_and_domain(self):
-        result = prep.setup_prompt("---\nrole: TestRole\n---\n")
-        self.assertIn(prep.ROLE, result)
-        self.assertIn(prep.DOMAIN, result)
-        self.assertIn(prep.COMPANY, result)
-        self.assertIn(prep.AUDIENCE, result)
-
-    def test_profile_content_injected(self):
-        profile = "---\nrole: TestRole\ncompany: TestCo\n---\n\n## Notes\nSpecial notes here."
-        result = prep.setup_prompt(profile)
-        self.assertIn("Special notes here", result)
-
-    def test_no_stray_placeholders(self):
-        result = prep.setup_prompt("test profile content")
-        for placeholder in ["{PREP_ROLE}", "{PREP_COMPANY}", "{PREP_DOMAIN}",
-                            "{PREP_AUDIENCE}", "{AS_OF_DATE}", "{PROFILE_CONTENT}"]:
-            self.assertNotIn(placeholder, result)
-
-
-class TestSetupInMainFlow(unittest.TestCase):
-    """Test setup command integration in main()."""
-
-    def test_setup_requires_profile(self):
-        with self.assertRaises(SystemExit):
-            with patch('sys.argv', ['prep.py', 'setup']):
-                prep.main()
-
-    def test_setup_in_api_commands(self):
-        """setup should be in the argparse choices."""
-        p = argparse.ArgumentParser()
-        p.add_argument("command", choices=["all","syllabus","content","add","setup","package","status","render","init"])
-        args = p.parse_args(["setup"])
-        self.assertEqual(args.command, "setup")
-
-    @patch('prep.get_client')
-    @patch('prep._confirm_cost', return_value=False)
-    def test_setup_bypasses_preflight(self, mock_confirm, mock_client):
-        """setup should NOT call _preflight_check (stubs are expected)."""
-        mock_client.return_value = MagicMock()
-        tmpdir = tempfile.mkdtemp()
-        saved = {}
-        _all_attrs = (
-            _ProfileTestMixin._PROFILE_DIR_ATTRS
-            + _ProfileTestMixin._PROFILE_CFG_ATTRS
-            + _ProfileTestMixin._PROFILE_COUNT_ATTRS
-        )
-        for attr in _all_attrs:
-            saved[attr] = getattr(prep, attr)
-        orig_base = prep.BASE_DIR
-        orig_adapted = prep._ADAPTED.copy()
-        try:
-            prep.BASE_DIR = Path(tmpdir)
-            # Create profile with STUB adapted files
-            profile_dir = Path(tmpdir) / "profiles" / "testsetup"
-            for sub in ["inputs/agendas", "inputs/episodes", "inputs/misc",
-                        "outputs/syllabus", "outputs/episodes", "outputs/gem",
-                        "outputs/notebooklm", "outputs/raw", "adapted"]:
-                (profile_dir / sub).mkdir(parents=True, exist_ok=True)
-            (profile_dir / "profile.md").write_text(
-                "---\nrole: Tester\ncompany: TestCo\ndomain: Testing\n---\n",
-                encoding="utf-8")
-            for fname in ["seeds.md", "coverage.md", "lenses.md", "gem-sections.md"]:
-                (profile_dir / "adapted" / fname).write_text(
-                    "<!-- STUB: placeholder -->\n", encoding="utf-8")
-
-            # This should NOT raise SystemExit from _preflight_check
-            # (it will be cancelled by _confirm_cost returning False)
-            with patch('sys.argv', ['prep.py', 'setup', '--profile', 'testsetup']):
-                prep.main()
-
-            # _confirm_cost was called (means we got past profile loading without preflight error)
-            mock_confirm.assert_called_once()
-        finally:
-            prep.BASE_DIR = orig_base
-            prep._ADAPTED = orig_adapted
-            for attr, val in saved.items():
-                setattr(prep, attr, val)
-            shutil.rmtree(tmpdir)
-
-
-class TestSyllabusReviewChecklist(unittest.TestCase):
-    """Verify review checklist prints after standalone syllabus generation."""
-
-    def test_checklist_contains_review_items(self):
-        buf = io.StringIO()
-        with contextlib.redirect_stdout(buf):
-            prep._print_syllabus_review("my-domain")
-        out = buf.getvalue()
-        self.assertIn("Review before running content generation", out)
-        self.assertIn("No duplicate topics", out)
-        self.assertIn("Mental models are distinct", out)
-        self.assertIn(f"{len(prep.ALL_EPS)} episodes", out)
-        self.assertIn("python3 prep.py content --profile my-domain", out)
-        self.assertIn("python3 prep.py syllabus --profile my-domain --force", out)
-
-    def test_checklist_scales_with_episode_count(self):
-        orig = (prep._CORE_COUNT, prep._FRONTIER_COUNT)
-        try:
-            prep._reconfigure(6, 1)
-            buf = io.StringIO()
-            with contextlib.redirect_stdout(buf):
-                prep._print_syllabus_review("test")
-            self.assertIn("7 episodes", buf.getvalue())
-        finally:
-            prep._reconfigure(*orig)
-
-
-class TestDefensiveValidation(unittest.TestCase):
-    """Defensive validation hardening — edge cases that should error clearly."""
-
-    # --- 1. Empty profile field validation ---
-
-    def setUp(self):
-        self.tmpdir = tempfile.mkdtemp()
-        self._orig_base = prep.BASE_DIR
-        prep.BASE_DIR = Path(self.tmpdir)
-
-    def tearDown(self):
-        prep.BASE_DIR = self._orig_base
-        shutil.rmtree(self.tmpdir)
-
-    def _write_profile(self, name, content):
-        d = Path(self.tmpdir) / "profiles" / name
-        d.mkdir(parents=True, exist_ok=True)
-        (d / "profile.md").write_text(content, encoding="utf-8")
-
-    def test_blank_required_field_errors(self):
-        """Profile with 'role: \\n' (blank value) should exit with 'blank' message."""
-        self._write_profile("test", "---\nrole: \ncompany: Co\ndomain: D\n---\n")
-        buf = io.StringIO()
-        with self.assertRaises(SystemExit):
-            with contextlib.redirect_stdout(buf):
-                prep.load_profile("test")
-        self.assertIn("blank", buf.getvalue())
-        self.assertIn("role", buf.getvalue())
-
-    def test_blank_optional_field_still_skipped(self):
-        """Blank optional fields (like audience) should be silently skipped."""
-        self._write_profile("test", "---\nrole: SWE\ncompany: Co\ndomain: D\naudience: \n---\n")
-        cfg = prep.load_profile("test")
-        self.assertNotIn("audience", cfg)
-
-    # --- 2. cmd_content: missing agendas suggest syllabus ---
-
-    def test_all_missing_agendas_suggests_syllabus(self):
-        """When all episodes lack agendas, output should suggest running syllabus."""
-        tmpdir = tempfile.mkdtemp()
-        orig = {}
-        for attr in ['IN_AGENDAS', 'IN_EPISODES', 'SYLLABUS_DIR', 'EPISODES_DIR',
-                      'RAW_DIR', 'GEM_DIR', 'NLM_DIR']:
-            orig[attr] = getattr(prep, attr)
-            new_dir = Path(tmpdir) / attr.lower()
-            new_dir.mkdir(parents=True)
-            setattr(prep, attr, new_dir)
-
-        orig_all = prep.ALL_EPS
-        prep.ALL_EPS = [1, 2, 3]
-        try:
-            client = MagicMock()
-            buf = io.StringIO()
-            with contextlib.redirect_stdout(buf):
-                prep.cmd_content(client, force=False)
-            output = buf.getvalue()
-            self.assertIn("syllabus", output)
-            self.assertIn("3 episode(s) had no agenda", output)
-            client.responses.create.assert_not_called()
-        finally:
-            prep.ALL_EPS = orig_all
-            for attr, val in orig.items():
-                setattr(prep, attr, val)
-            shutil.rmtree(tmpdir)
-
-    # --- 3. Profile name validation in cmd_init ---
-
-    def test_rejects_invalid_profile_names(self):
-        """Path traversal, spaces, slashes, dots, empty — all rejected."""
-        for bad_name in ["../etc", "my domain", "a/b", ".hidden", ""]:
-            with self.assertRaises(SystemExit, msg=f"Should reject: {bad_name!r}"):
-                prep.cmd_init(bad_name)
-
-    def test_accepts_valid_profile_names(self):
-        """Alphanumeric with hyphens and underscores should pass."""
-        for good_name in ["my-domain", "test_123", "A1"]:
-            prep.cmd_init(good_name)
-            self.assertTrue(
-                (Path(self.tmpdir) / "profiles" / good_name / "profile.md").exists(),
-                f"Should accept: {good_name!r}"
-            )
-
-    # --- 4. Binary file handling in cmd_add ---
-
-    def test_add_binary_file_errors(self):
-        """Binary file should return False and not call LLM."""
-        tmpdir = tempfile.mkdtemp()
-        orig = {}
-        for attr in ['SYLLABUS_DIR', 'EPISODES_DIR', 'GEM_DIR', 'NLM_DIR']:
-            orig[attr] = getattr(prep, attr)
-            new_dir = Path(tmpdir) / attr.lower()
-            new_dir.mkdir(parents=True)
-            setattr(prep, attr, new_dir)
-
-        try:
-            binfile = Path(tmpdir) / "fake.png"
-            binfile.write_bytes(b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR')
-
-            client = MagicMock()
-            buf = io.StringIO()
-            with contextlib.redirect_stdout(buf):
-                result = prep.cmd_add(client, str(binfile))
-            self.assertFalse(result)
-            self.assertIn("not valid UTF-8", buf.getvalue())
-            client.responses.create.assert_not_called()
-        finally:
-            for attr, val in orig.items():
-                setattr(prep, attr, val)
-            shutil.rmtree(tmpdir)
-
-
-class TestCmdValidate(_ProfileTestMixin, unittest.TestCase):
-    """Test cmd_validate comprehensive pre-pipeline checks."""
-
-    _VALID_ADAPTED = {
-        "seeds.md": "<!-- DOMAIN_SEEDS -->\nReal seed content",
-        "coverage.md": "<!-- COVERAGE_FRAMEWORK -->\nReal coverage",
-        "lenses.md": (
-            "<!-- DOMAIN_LENS -->\nLens\n\n"
-            "<!-- NITTY_GRITTY_LAYOUT -->\n1) Details\n\n"
-            "<!-- DOMAIN_REQUIREMENTS -->\n- Req\n\n"
-            "<!-- DISTILL_REQUIREMENTS -->\n- Distill\n\n"
-            "<!-- STAKEHOLDERS -->\nEng, Product"
-        ),
-        "gem-sections.md": (
-            "<!-- GEM_BOOKSHELF -->\nBooks\n\n"
-            "<!-- GEM_EXAMPLES -->\nExamples\n\n"
-            "<!-- GEM_CODING -->\nCoding\n\n"
-            "<!-- GEM_FORMAT_EXAMPLES -->\nFormats"
-        ),
-    }
-
-    def setUp(self):
-        self.tmpdir = tempfile.mkdtemp()
-        self._save_profile_state()
-        self._orig_base = prep.BASE_DIR
-        prep.BASE_DIR = Path(self.tmpdir)
-        self._orig_api_key = os.environ.get("OPENAI_API_KEY")
-
-    def tearDown(self):
-        prep.BASE_DIR = self._orig_base
-        self._restore_profile_state()
-        if self._orig_api_key is not None:
-            os.environ["OPENAI_API_KEY"] = self._orig_api_key
-        elif "OPENAI_API_KEY" in os.environ:
-            del os.environ["OPENAI_API_KEY"]
-        shutil.rmtree(self.tmpdir)
-
-    def _setup_valid_profile(self, name="testval"):
-        self._write_profile(name, "---\nrole: Test Engineer\ncompany: TestCo\ndomain: Test Engineering\n---\n")
-        self._write_adapted(name, self._VALID_ADAPTED)
-        prep.set_profile(name)
-        return name
-
-    def test_passes_with_valid_profile(self):
-        """All checks green when profile, adapted files, and API key are valid."""
-        os.environ["OPENAI_API_KEY"] = "sk-test-key"
-        name = self._setup_valid_profile()
-        buf = io.StringIO()
-        with contextlib.redirect_stdout(buf):
-            result = prep.cmd_validate(name)
-        self.assertTrue(result)
-        self.assertIn("all checks passed", buf.getvalue())
-        self.assertNotIn("[ ]", buf.getvalue())
-
-    def test_catches_missing_api_key(self):
-        """Missing OPENAI_API_KEY is reported."""
-        if "OPENAI_API_KEY" in os.environ:
-            del os.environ["OPENAI_API_KEY"]
-        name = self._setup_valid_profile()
-        buf = io.StringIO()
-        with contextlib.redirect_stdout(buf):
-            result = prep.cmd_validate(name)
-        self.assertFalse(result)
-        self.assertIn("API key", buf.getvalue())
-        self.assertIn("1 issue found", buf.getvalue())
-
-    def test_catches_stub_adapted(self):
-        """Stub adapted files are reported."""
-        os.environ["OPENAI_API_KEY"] = "sk-test-key"
-        name = "stubbed"
-        self._write_profile(name, "---\nrole: R\ncompany: C\ndomain: D\n---\n")
-        self._write_adapted(name, {
-            "seeds.md": "<!-- STUB: placeholder -->\n",
-            "coverage.md": "<!-- STUB: placeholder -->\n",
-            "lenses.md": "<!-- STUB: placeholder -->\n",
-            "gem-sections.md": "<!-- STUB: placeholder -->\n",
+    def test_adapt_force_regenerates(self):
+        """--force should overwrite existing domain files."""
+        self._write_domain("test", {
+            "seeds.md": "<!-- DOMAIN_SEEDS -->\nOld content",
+            "coverage.md": "<!-- COVERAGE_FRAMEWORK -->\nOld",
+            "lenses.md": "<!-- DOMAIN_LENS -->\nOld",
+            "gem-sections.md": "<!-- GEM_BOOKSHELF -->\nOld",
         })
-        prep.set_profile(name)
-        buf = io.StringIO()
-        with contextlib.redirect_stdout(buf):
-            result = prep.cmd_validate(name)
+        client = self._mock_client([
+            self._seeds_response(),
+            self._lenses_response(),
+            self._gem_response(),
+        ])
+        result = prep.cmd_adapt(client, "test", force=True)
+        self.assertTrue(result)
+        domain_dir = Path(self.tmpdir) / "profiles" / "test" / "domain"
+        text = (domain_dir / "seeds.md").read_text(encoding="utf-8")
+        self.assertIn("Test Topic", text)
+        self.assertNotIn("Old content", text)
+
+    def test_adapt_reads_context_docs(self):
+        """Context docs from inputs/misc/ should appear in call 1 prompt."""
+        misc_dir = Path(self.tmpdir) / "profiles" / "test" / "inputs" / "misc"
+        misc_dir.mkdir(parents=True, exist_ok=True)
+        (misc_dir / "notes.md").write_text("Special notes about testing", encoding="utf-8")
+
+        client = self._mock_client([
+            self._seeds_response(),
+            self._lenses_response(),
+            self._gem_response(),
+        ])
+        prep.cmd_adapt(client, "test", force=True)
+
+        # The first API call should include context docs
+        call_args = client.responses.create.call_args_list[0]
+        input_text = call_args.kwargs.get("input", "")
+        self.assertIn("Special notes about testing", input_text)
+
+    def test_adapt_call3_receives_seeds(self):
+        """Call 3 (gem) prompt should contain seeds from call 1."""
+        client = self._mock_client([
+            self._seeds_response(),
+            self._lenses_response(),
+            self._gem_response(),
+        ])
+        prep.cmd_adapt(client, "test", force=True)
+
+        # Third call should have seeds content
+        call_args = client.responses.create.call_args_list[2]
+        input_text = call_args.kwargs.get("input", "")
+        self.assertIn("Test Topic", input_text)
+
+    def test_adapt_saves_raw_outputs(self):
+        """Raw API responses should be saved."""
+        client = self._mock_client([
+            self._seeds_response(),
+            self._lenses_response(),
+            self._gem_response(),
+        ])
+        prep.cmd_adapt(client, "test", force=True)
+        raw_dir = Path(self.tmpdir) / "profiles" / "test" / "outputs" / "raw"
+        self.assertTrue((raw_dir / "adapt-1-seeds.md").exists())
+        self.assertTrue((raw_dir / "adapt-2-lenses.md").exists())
+        self.assertTrue((raw_dir / "adapt-3-gem.md").exists())
+
+    def test_adapt_handles_api_failure(self):
+        """Should return False on first call failure."""
+        resp = MagicMock(status="failed", output_text=None, error="test error")
+        client = MagicMock()
+        client.responses.create.return_value = resp
+        result = prep.cmd_adapt(client, "test", force=True)
         self.assertFalse(result)
-        output = buf.getvalue()
-        self.assertIn("adapted/seeds.md", output)
-        self.assertIn("adapted/coverage.md", output)
-        self.assertIn("adapted/lenses.md", output)
-        self.assertIn("adapted/gem-sections.md", output)
 
-    def test_catches_missing_markers(self):
-        """Adapted file with content but missing expected marker is reported."""
-        os.environ["OPENAI_API_KEY"] = "sk-test-key"
-        name = "partial"
-        adapted = dict(self._VALID_ADAPTED)
-        # lenses.md missing STAKEHOLDERS
-        adapted["lenses.md"] = (
-            "<!-- DOMAIN_LENS -->\nLens\n\n"
-            "<!-- NITTY_GRITTY_LAYOUT -->\n1) Details\n\n"
-            "<!-- DOMAIN_REQUIREMENTS -->\n- Req\n\n"
-            "<!-- DISTILL_REQUIREMENTS -->\n- Distill"
-        )
-        self._write_profile(name, "---\nrole: R\ncompany: C\ndomain: D\n---\n")
-        self._write_adapted(name, adapted)
-        prep.set_profile(name)
-        buf = io.StringIO()
-        with contextlib.redirect_stdout(buf):
-            result = prep.cmd_validate(name)
+    def test_adapt_partial_failure(self):
+        """Call 1 ok, call 2 fails: seeds+coverage should still be written."""
+        resp1 = MagicMock(status="completed", output_text=self._seeds_response(), usage=None)
+        resp2 = MagicMock(status="failed", output_text=None, error="test error")
+        client = MagicMock()
+        client.responses.create.side_effect = [resp1, resp2]
+
+        result = prep.cmd_adapt(client, "test", force=True)
         self.assertFalse(result)
-        output = buf.getvalue()
-        self.assertIn("STAKEHOLDERS", output)
-        self.assertIn("1 issue found", output)
-
-    def test_reports_all_issues(self):
-        """Multiple problems are all reported (not just the first)."""
-        if "OPENAI_API_KEY" in os.environ:
-            del os.environ["OPENAI_API_KEY"]
-        name = "multi"
-        self._write_profile(name, "---\nrole: R\ncompany: C\ndomain: D\n---\n")
-        self._write_adapted(name, {
-            "seeds.md": "<!-- STUB: placeholder -->\n",
-            "coverage.md": "<!-- COVERAGE_FRAMEWORK -->\nReal",
-            "lenses.md": "<!-- DOMAIN_LENS -->\nOnly one marker",
-            "gem-sections.md": "<!-- GEM_BOOKSHELF -->\nBooks",
-        })
-        prep.set_profile(name)
-        buf = io.StringIO()
-        with contextlib.redirect_stdout(buf):
-            result = prep.cmd_validate(name)
-        self.assertFalse(result)
-        output = buf.getvalue()
-        # API key + seeds.md stub + lenses.md missing markers + gem-sections.md missing markers
-        self.assertIn("API key", output)
-        self.assertIn("adapted/seeds.md", output)
-        self.assertIn("STAKEHOLDERS", output)
-        # Count [ ] occurrences — should be more than 1
-        fail_count = output.count("[ ]")
-        self.assertGreaterEqual(fail_count, 3)
+        domain_dir = Path(self.tmpdir) / "profiles" / "test" / "domain"
+        # Seeds and coverage from call 1 should exist
+        self.assertTrue((domain_dir / "seeds.md").exists())
+        self.assertTrue((domain_dir / "coverage.md").exists())
 
 
-class TestFullPipelineSmoke(_ProfileTestMixin, unittest.TestCase):
-    """End-to-end smoke test: init -> setup -> syllabus -> content -> package -> status -> render.
+class TestAdaptPromptTemplates(unittest.TestCase):
+    """Test that meta-prompt templates render without unreplaced placeholders."""
 
-    Exercises the full happy path with 2 core + 1 frontier episode using
-    mocked call_llm responses.  Verifies outputs exist at each stage.
-    """
+    def test_meta_seeds_prompt_renders(self):
+        text = prep.load_prompt("meta-seeds")
+        rendered = text.replace("{ROLE}", "SWE").replace("{COMPANY}", "Acme")
+        rendered = rendered.replace("{DOMAIN}", "Testing").replace("{AUDIENCE}", "Engineers")
+        rendered = rendered.replace("{PROFILE_CONTENT}", "test profile")
+        rendered = rendered.replace("{CONTEXT_DOCS}", "test docs")
+        # No unreplaced input placeholders
+        for p in ["{ROLE}", "{COMPANY}", "{DOMAIN}", "{AUDIENCE}",
+                  "{PROFILE_CONTENT}", "{CONTEXT_DOCS}"]:
+            self.assertNotIn(p, rendered)
 
-    _SETUP_RESPONSE = (
-        "=== FILE: seeds.md ===\n"
-        "<!-- DOMAIN_SEEDS -->\nSeed topics for test domain.\n\n"
-        "=== FILE: coverage.md ===\n"
-        "<!-- COVERAGE_FRAMEWORK -->\nCoverage framework for test domain.\n\n"
-        "=== FILE: lenses.md ===\n"
-        "<!-- DOMAIN_LENS -->\nTest lens content.\n\n"
-        "<!-- NITTY_GRITTY_LAYOUT -->\n1) **Test Details**\n\n"
-        "<!-- DOMAIN_REQUIREMENTS -->\n- Test domain requirements.\n\n"
-        "<!-- DISTILL_REQUIREMENTS -->\n- Test distill requirements.\n\n"
-        "<!-- STAKEHOLDERS -->\nEngineering, Product, Security\n\n"
-        "=== FILE: gem-sections.md ===\n"
-        "<!-- GEM_BOOKSHELF -->\nTest bookshelf references.\n\n"
-        "<!-- GEM_EXAMPLES -->\n> Test example question.\n\n"
-        "<!-- GEM_CODING -->\nTest coding section.\n\n"
-        "<!-- GEM_FORMAT_EXAMPLES -->\nFeb 10|Test|Topic|Concept|Owned|Detail|Locked"
-    )
+    def test_meta_lenses_prompt_renders(self):
+        text = prep.load_prompt("meta-lenses")
+        rendered = text.replace("{ROLE}", "SWE").replace("{COMPANY}", "Acme")
+        rendered = rendered.replace("{DOMAIN}", "Testing")
+        rendered = rendered.replace("{PROFILE_CONTENT}", "test profile")
+        for p in ["{ROLE}", "{COMPANY}", "{DOMAIN}", "{PROFILE_CONTENT}"]:
+            self.assertNotIn(p, rendered)
 
-    _CORE_BATCH_RESPONSE = (
-        "## Episode 1: Test Topic Alpha\n"
-        "Hook for episode 1.\n"
-        "Detailed agenda content for episode 1.\n\n"
-        "## Episode 2: Test Topic Beta\n"
-        "Hook for episode 2.\n"
-        "Detailed agenda content for episode 2.\n"
-    )
+    def test_meta_gem_prompt_renders(self):
+        text = prep.load_prompt("meta-gem")
+        rendered = text.replace("{ROLE}", "SWE").replace("{COMPANY}", "Acme")
+        rendered = rendered.replace("{DOMAIN}", "Testing")
+        rendered = rendered.replace("{PROFILE_CONTENT}", "test profile")
+        rendered = rendered.replace("{SEEDS_CONTENT}", "test seeds")
+        for p in ["{ROLE}", "{COMPANY}", "{DOMAIN}",
+                  "{PROFILE_CONTENT}", "{SEEDS_CONTENT}"]:
+            self.assertNotIn(p, rendered)
 
-    _FRONTIER_RESPONSE = (
-        "## Frontier Digest A: Emerging Test Trends\n"
-        "Frontier content for digest A.\n"
-        "Detailed frontier analysis and emerging topics.\n"
-    )
 
-    _CONTENT_RESPONSE = (
-        "# Technical Deep Dive\n\n"
-        "## Section 1: Core Concepts\n\n"
-        + ("This is detailed technical content for the episode. " * 30) + "\n\n"
-        "## Section 2: Deep Analysis\n\n"
-        + ("Advanced analysis and architectural patterns discussed in depth. " * 20) + "\n"
-    )
+class TestPreflightSkipsAdapt(_ProfileTestMixin, unittest.TestCase):
+    """Preflight should skip validation for adapt command."""
 
     def setUp(self):
         self.tmpdir = tempfile.mkdtemp()
@@ -3986,119 +3592,80 @@ class TestFullPipelineSmoke(_ProfileTestMixin, unittest.TestCase):
         self._restore_profile_state()
         shutil.rmtree(self.tmpdir)
 
-    def _mock_call_llm(self, client, instructions, user_input, label="", retries=3):
-        """Route mock responses by label."""
-        if "Setup" in label:
-            return self._SETUP_RESPONSE
-        if "SCAFFOLD" in label:
-            return "Scaffold overview for the test domain."
-        if "CORE_BATCH" in label:
-            return self._CORE_BATCH_RESPONSE
-        if "FRONTIER_DIGEST" in label:
-            return self._FRONTIER_RESPONSE
-        if "FINAL_MERGE" in label:
-            return "Final merged syllabus for the test domain."
-        if label.startswith("Episode"):
-            return self._CONTENT_RESPONSE
-        return "Mock response"
+    def test_preflight_skips_for_adapt(self):
+        """Preflight should not error for adapt command even without domain files."""
+        self._write_profile("test", "---\nrole: R\ncompany: C\ndomain: D\n---\n")
+        # Should not raise even though domain files don't exist
+        prep._preflight_check("test", "adapt")
 
-    @patch('prep.call_llm')
-    def test_full_pipeline(self, mock_llm):
-        """The full happy path: init through render, zero real API calls."""
-        mock_llm.side_effect = self._mock_call_llm
-        client = MagicMock()
-        profile_name = "smoketest"
 
-        # --- 1. init ---
-        buf = io.StringIO()
-        with contextlib.redirect_stdout(buf):
-            prep.cmd_init(profile_name)
-        profile_dir = Path(self.tmpdir) / "profiles" / profile_name
-        self.assertTrue(profile_dir.exists())
-        self.assertTrue((profile_dir / "profile.md").exists())
+class TestStatusShowsDomainFiles(_ProfileTestMixin, unittest.TestCase):
+    """Status should show domain files in pipeline checklist."""
 
-        # --- 2. fill in profile.md ---
-        (profile_dir / "profile.md").write_text(
-            "---\n"
-            "role: Test Engineer\n"
-            "company: TestCo\n"
-            "domain: Test Engineering\n"
-            "audience: Senior Engineers\n"
-            "core_episodes: 2\n"
-            "frontier_episodes: 1\n"
-            "---\n",
-            encoding="utf-8",
-        )
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self._save_profile_state()
+        self._orig_base = prep.BASE_DIR
+        prep.BASE_DIR = Path(self.tmpdir)
 
-        # --- 3. load profile ---
-        prep.set_profile(profile_name)
+    def tearDown(self):
+        prep.BASE_DIR = self._orig_base
+        self._restore_profile_state()
+        shutil.rmtree(self.tmpdir)
+
+    def test_status_shows_domain_files_line(self):
+        """Pipeline checklist should include domain files."""
+        self._write_profile("myprep", "---\nrole: SWE\ncompany: Acme\ndomain: D\n---\n")
+        prep.set_profile("myprep")
         prep.ensure_dirs()
-        self.assertEqual(prep._CORE_COUNT, 2)
-        self.assertEqual(prep._FRONTIER_COUNT, 1)
-        self.assertEqual(len(prep.ALL_EPS), 3)
 
-        # --- 4. setup ---
-        buf = io.StringIO()
-        with contextlib.redirect_stdout(buf):
-            result = prep.cmd_setup(client, profile_name)
-        self.assertTrue(result, f"cmd_setup failed:\n{buf.getvalue()}")
+        import io
+        from contextlib import redirect_stdout
+        with redirect_stdout(io.StringIO()) as f:
+            prep.cmd_status(profile_name="myprep")
+        output = f.getvalue()
+        self.assertIn("Domain files", output)
+        self.assertIn("0/4", output)
 
-        adapted_dir = profile_dir / "adapted"
-        for fname in ["seeds.md", "coverage.md", "lenses.md", "gem-sections.md"]:
-            self.assertTrue((adapted_dir / fname).exists(), f"{fname} not written")
-            self.assertFalse(prep._is_stub(adapted_dir / fname), f"{fname} still a stub")
-            sections = prep._parse_adapted_sections(
-                (adapted_dir / fname).read_text(encoding="utf-8")
-            )
-            self.assertGreater(len(sections), 0, f"{fname} has no marker sections")
+    def test_status_domain_complete(self):
+        """Domain files should show as complete when all 4 exist."""
+        self._write_profile("myprep", "---\nrole: SWE\ncompany: Acme\ndomain: D\n---\n")
+        self._write_domain("myprep", {
+            "seeds.md": "<!-- DOMAIN_SEEDS -->\nReal",
+            "coverage.md": "<!-- COVERAGE_FRAMEWORK -->\nReal",
+            "lenses.md": "<!-- DOMAIN_LENS -->\nReal",
+            "gem-sections.md": "<!-- GEM_BOOKSHELF -->\nReal",
+        })
+        prep.set_profile("myprep")
+        prep.ensure_dirs()
 
-        # --- 5. syllabus (4 runs: scaffold, core_batch, frontier_digest, final_merge) ---
-        buf = io.StringIO()
-        with contextlib.redirect_stdout(buf):
-            result = prep.cmd_syllabus(client)
-        self.assertTrue(result, f"cmd_syllabus failed:\n{buf.getvalue()}")
+        import io
+        from contextlib import redirect_stdout
+        with redirect_stdout(io.StringIO()) as f:
+            prep.cmd_status(profile_name="myprep")
+        output = f.getvalue()
+        self.assertIn("[x] Domain files", output)
+        self.assertIn("4/4", output)
+        self.assertIn("syllabus", output)  # next command should be syllabus
 
-        for ep in prep.ALL_EPS:
-            self.assertIsNotNone(prep.find_agenda(ep), f"Agenda missing for ep {ep}")
 
-        # --- 6. content (3 episodes) ---
-        buf = io.StringIO()
-        with contextlib.redirect_stdout(buf):
-            result = prep.cmd_content(client)
-        self.assertTrue(result, f"cmd_content failed:\n{buf.getvalue()}")
+class TestAdaptCliIntegration(unittest.TestCase):
+    """Test adapt command CLI integration."""
 
-        for ep in prep.ALL_EPS:
-            self.assertIsNotNone(prep.find_content(ep), f"Content missing for ep {ep}")
+    def test_adapt_in_argparse_choices(self):
+        """adapt should be a valid command choice."""
+        import argparse
+        p = argparse.ArgumentParser()
+        p.add_argument("command", choices=["all","syllabus","content","add","adapt","package","status","render","init"])
+        args = p.parse_args(["adapt"])
+        self.assertEqual(args.command, "adapt")
 
-        # --- 7. package ---
-        buf = io.StringIO()
-        with contextlib.redirect_stdout(buf):
-            result = prep.cmd_package()
-        self.assertTrue(result, f"cmd_package failed:\n{buf.getvalue()}")
-
-        # gem-1.md (core eps 1-2), gem-2.md (frontier ep 3)
-        self.assertTrue((prep.GEM_DIR / "gem-1.md").exists(), "gem-1.md missing")
-        self.assertTrue((prep.GEM_DIR / "gem-2.md").exists(), "gem-2.md missing")
-
-        nlm_files = list(prep.NLM_DIR.glob("*.md"))
-        self.assertEqual(len(nlm_files), 3,
-            f"Expected 3 NotebookLM files, got {len(nlm_files)}")
-
-        # --- 8. status ---
-        buf = io.StringIO()
-        with contextlib.redirect_stdout(buf):
-            prep.cmd_status(profile_name=profile_name)
-        self.assertIn("TestCo", buf.getvalue())
-
-        # --- 9. render ---
-        rendered = prep.render_template("Role: {PREP_ROLE}, Company: {PREP_COMPANY}")
-        self.assertIn("Test Engineer", rendered)
-        self.assertIn("TestCo", rendered)
-        self.assertNotIn("{PREP_ROLE}", rendered)
-
-        # Total: 1 setup + 4 syllabus + 3 content = 8 calls
-        self.assertEqual(mock_llm.call_count, 8,
-            f"Expected 8 call_llm calls, got {mock_llm.call_count}")
+    def test_adapt_requires_profile(self):
+        """adapt should require --profile."""
+        with self.assertRaises(SystemExit) as cm:
+            with patch('sys.argv', ['prep.py', 'adapt']):
+                prep.main()
+        self.assertEqual(cm.exception.code, 1)
 
 
 if __name__ == "__main__":

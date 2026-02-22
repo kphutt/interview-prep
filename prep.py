@@ -6,21 +6,20 @@ Automates: Syllabus (8 runs) -> Content (per episode) -> Package (Gem + Notebook
 
 Usage:
     python prep.py init <profile-name>                    # Create new profile skeleton
-    python prep.py setup  --profile P                     # Generate adapted/ files via API
+    python prep.py adapt  --profile P                     # Generate domain files (3 API calls)
     python prep.py all    --profile P                     # Full pipeline
     python prep.py syllabus --profile P                   # Generate agendas only
     python prep.py content --profile P [--episode N]      # Generate content
     python prep.py add <file> --profile P [--gem-slot N]  # Distill doc -> content -> package
     python prep.py package [--profile P]                  # Repackage outputs
     python prep.py render <file> [--profile P]            # Substitute env vars, print to stdout
-    python prep.py validate --profile P                    # Check profile + env readiness
     python prep.py status  [--profile P]                  # Show what exists
 
 Setup:
     pip install -r requirements.txt
     cp .env.example .env   # edit .env with your API key
     set -a && source .env && set +a
-    python prep.py setup --profile <name>
+    python prep.py adapt --profile <name>
 """
 
 import argparse
@@ -153,24 +152,15 @@ def _listening_order_str():
     return " -> ".join(parts)
 
 # ---------------------------------------------------------------------------
-# ADAPTED CONTENT (domain-specific prompt injection)
+# DOMAIN CONTENT (domain-specific prompt injection)
 # ---------------------------------------------------------------------------
-_ADAPTED = {}  # marker -> content, populated by set_profile()
+_DOMAIN = {}  # marker -> content, populated by set_profile()
 
 # Stub comment prefix — files starting with this are considered empty stubs
-_ADAPTED_STUB_PREFIX = "<!-- STUB:"
+_STUB_PREFIX = "<!-- STUB:"
 
-_ADAPTED_EXPECTED_MARKERS = {
-    "seeds.md": ["DOMAIN_SEEDS"],
-    "coverage.md": ["COVERAGE_FRAMEWORK"],
-    "lenses.md": ["DOMAIN_LENS", "NITTY_GRITTY_LAYOUT", "DOMAIN_REQUIREMENTS",
-                   "DISTILL_REQUIREMENTS", "STAKEHOLDERS"],
-    "gem-sections.md": ["GEM_BOOKSHELF", "GEM_EXAMPLES", "GEM_CODING",
-                        "GEM_FORMAT_EXAMPLES"],
-}
-
-def _parse_adapted_sections(text):
-    """Parse <!-- MARKER --> delimited sections from adapted file content."""
+def _parse_domain_sections(text):
+    """Parse <!-- MARKER --> delimited sections from domain file content."""
     result = {}
     current_marker = None
     current_lines = []
@@ -188,66 +178,55 @@ def _parse_adapted_sections(text):
     return result
 
 
-def _parse_setup_response(text):
-    """Parse setup LLM response into {filename: content} dict.
-    Splits on '=== FILE: <name> ===' delimiters."""
+def _load_domain(profile_name):
+    """Load domain files from profiles/{name}/domain/. Returns dict of marker->content."""
+    domain_dir = BASE_DIR / "profiles" / profile_name / "domain"
     result = {}
-    parts = re.split(r'^=== FILE:\s*(\S+)\s*===\s*$', text, flags=re.MULTILINE)
-    # parts[0] is text before first delimiter (discard),
-    # then alternating: filename, content, filename, content, ...
-    for i in range(1, len(parts) - 1, 2):
-        filename = parts[i].strip()
-        content = parts[i + 1].strip()
-        if filename:
-            result[filename] = content
-    return result
-
-
-def _load_adapted(profile_name):
-    """Load adapted files from profiles/{name}/adapted/. Returns dict of marker->content."""
-    adapted_dir = BASE_DIR / "profiles" / profile_name / "adapted"
-    result = {}
-    if not adapted_dir.is_dir():
+    if not domain_dir.is_dir():
         return result
-    for f in sorted(adapted_dir.iterdir()):
+    for f in sorted(domain_dir.iterdir()):
         if f.suffix == ".md":
             text = f.read_text(encoding="utf-8")
-            sections = _parse_adapted_sections(text)
+            sections = _parse_domain_sections(text)
             if not sections:
                 print(f"  WARNING: {f.name} has no <!-- MARKER --> sections")
             result.update(sections)
     return result
 
 
-def _inject_adapted(text, adapted=None):
-    """Replace {MARKER} placeholders with adapted content."""
-    if adapted is None:
-        adapted = _ADAPTED
-    for marker, content in adapted.items():
+def _inject_domain(text, domain=None):
+    """Replace {MARKER} placeholders with domain content."""
+    if domain is None:
+        domain = _DOMAIN
+    for marker, content in domain.items():
         text = text.replace("{" + marker + "}", content)
     return text
 
 
 def _is_stub(filepath):
-    """Check if an adapted file is a stub (starts with STUB comment)."""
+    """Check if a domain file is a stub (starts with STUB comment)."""
     if not filepath.exists():
         return True
     text = filepath.read_text(encoding="utf-8").strip()
-    return not text or text.startswith(_ADAPTED_STUB_PREFIX)
+    return not text or text.startswith(_STUB_PREFIX)
 
 
 def _preflight_check(profile_name, command, force=False):
     """Validate profile completeness before API calls. Errors early to avoid wasted spend."""
     profile_dir = BASE_DIR / "profiles" / profile_name
-    adapted_dir = profile_dir / "adapted"
+    domain_dir = profile_dir / "domain"
 
-    # 1. Adapted files exist and are non-stub
-    adapted_files = ["seeds.md", "coverage.md", "lenses.md", "gem-sections.md"]
-    for name in adapted_files:
-        f = adapted_dir / name
+    # adapt creates domain files, doesn't need them
+    if command == "adapt":
+        return
+
+    # 1. Domain files exist and are non-stub
+    domain_files = ["seeds.md", "coverage.md", "lenses.md", "gem-sections.md"]
+    for name in domain_files:
+        f = domain_dir / name
         if _is_stub(f):
-            print(f"ERROR: adapted/{name} is empty or missing.")
-            print(f"  Run 'python3 prep.py setup --profile {profile_name}' or use prompts/intake.md manually")
+            print(f"ERROR: domain/{name} is empty or missing.")
+            print(f"  Run 'python prep.py adapt --profile {profile_name}' or see prompts/intake.md")
             sys.exit(1)
 
     # 2. Prompt files exist
@@ -316,15 +295,18 @@ def load_profile(name):
             sys.exit(1)
 
     # Validate integer fields
+    _NONNEG_INT_FIELDS = {"frontier_episodes"}  # 0 is valid
     for field in _PROFILE_INT_FIELDS:
         if field in config:
             try:
                 val = int(config[field])
-                if val <= 0:
+                min_val = 0 if field in _NONNEG_INT_FIELDS else 1
+                if val < min_val:
                     raise ValueError()
                 config[field] = val
             except (ValueError, TypeError):
-                print(f"ERROR: {field} must be a positive integer, got '{config[field]}'.")
+                label = "non-negative" if field in _NONNEG_INT_FIELDS else "positive"
+                print(f"ERROR: {field} must be a {label} integer, got '{config[field]}'.")
                 sys.exit(1)
 
     return config
@@ -335,12 +317,12 @@ def set_profile(name):
     global OUTPUTS, SYLLABUS_DIR, EPISODES_DIR, GEM_DIR, NLM_DIR, RAW_DIR
     global IN_AGENDAS, IN_EPISODES, IN_MISC
     global ROLE, COMPANY, DOMAIN, AUDIENCE, MODEL, EFFORT, AS_OF
-    global _ADAPTED
+    global _DOMAIN
 
     config = load_profile(name)
 
-    # Load adapted content for domain injection
-    _ADAPTED = _load_adapted(name)
+    # Load domain content for prompt injection
+    _DOMAIN = _load_domain(name)
 
     # Redirect directories to profile paths (PROMPTS stays shared)
     profile_dir = BASE_DIR / "profiles" / name
@@ -545,8 +527,8 @@ def syllabus_prompt(run):
     t = t.replace("{FRONTIER_RANGE}", _frontier_range_str())
     t = t.replace("{FRONTIER_MAP}", _frontier_map_str())
     t = t.replace("{LISTENING_ORDER}", _listening_order_str())
-    # Adapted domain content
-    t = _inject_adapted(t)
+    # Domain content injection
+    t = _inject_domain(t)
     return t
 
 def content_prompt(agenda, notes=""):
@@ -556,8 +538,8 @@ def content_prompt(agenda, notes=""):
     t = t.replace("{ROLE}", ROLE)
     t = t.replace("{COMPANY}", COMPANY)
     t = t.replace("{AS_OF_DATE}", AS_OF)
-    # Adapted domain content (after role vars, before user content)
-    t = _inject_adapted(t)
+    # Domain content (after role vars, before user content)
+    t = _inject_domain(t)
     t = t.replace("{EXTRA_NOTES}", notes or "- No additional notes.")
     t = t.replace("{EPISODE_AGENDA}", agenda)
     return t
@@ -569,22 +551,9 @@ def distill_prompt(raw):
     t = t.replace("{ROLE}", ROLE)
     t = t.replace("{COMPANY}", COMPANY)
     t = t.replace("{DOMAIN}", DOMAIN)
-    # Adapted domain content (after role vars, before user content)
-    t = _inject_adapted(t)
+    # Domain content (after role vars, before user content)
+    t = _inject_domain(t)
     t = t.replace("{RAW_DOCUMENT}", raw)
-    return t
-
-def setup_prompt(profile_text):
-    """Build the setup prompt with profile content injected."""
-    t = load_prompt("setup")
-    # Role vars first (same pattern as other prompts)
-    t = t.replace("{PREP_ROLE}", ROLE)
-    t = t.replace("{PREP_COMPANY}", COMPANY)
-    t = t.replace("{PREP_DOMAIN}", DOMAIN)
-    t = t.replace("{PREP_AUDIENCE}", AUDIENCE)
-    t = t.replace("{AS_OF_DATE}", AS_OF)
-    # Profile content last (may contain braces)
-    t = t.replace("{PROFILE_CONTENT}", profile_text)
     return t
 
 def render_template(text):
@@ -595,8 +564,8 @@ def render_template(text):
     t = t.replace("{PREP_DOMAIN}", DOMAIN)
     t = t.replace("{PREP_AUDIENCE}", AUDIENCE)
     t = t.replace("{AS_OF_DATE}", AS_OF)
-    # Adapted domain content (for gem.md etc.)
-    t = _inject_adapted(t)
+    # Domain content (for gem.md etc.)
+    t = _inject_domain(t)
     return t
 
 def _syllabus_instructions():
@@ -610,10 +579,6 @@ def _content_instructions():
 def _distill_instructions():
     """System instructions for document distillation (dynamic for profile support)."""
     return f"You are a {ROLE} at {COMPANY} acting as an expert interview coach. Distill the provided document into an interview prep episode agenda. Output ONLY the agenda."
-
-def _setup_instructions():
-    """System instructions for setup/domain adaptation (dynamic for profile support)."""
-    return f"You are a {ROLE} at {COMPANY} acting as an expert interview coach. Generate domain-adapted configuration files for interview prep. Output ONLY the requested files in the specified format."
 
 # ---------------------------------------------------------------------------
 # PARSING
@@ -929,68 +894,125 @@ def cmd_add(client, filepath, slot=None):
     print(f"\n=== ADD COMPLETE ===\n")
     return True
 
-def cmd_setup(client, profile_name, force=False):
-    """Generate adapted/ files from profile.md via LLM."""
-    print(f"\n=== SETUP: {profile_name} ===\n")
 
+# ---------------------------------------------------------------------------
+# ADAPT COMMAND (generate domain files via API)
+# ---------------------------------------------------------------------------
+def _adapt_instructions():
+    """System instructions for adapt calls (domain file generation)."""
+    return f"You are a {ROLE} at {COMPANY} acting as an expert interview coach. Generate the requested domain-specific content sections exactly as specified. Output ONLY the sections with their marker comments — no preamble, no explanations."
+
+
+def _gather_context_docs():
+    """Read .md/.txt files from IN_MISC, return concatenated text or fallback."""
+    texts = []
+    if IN_MISC.is_dir():
+        for f in sorted(IN_MISC.iterdir()):
+            if f.suffix in (".md", ".txt"):
+                texts.append(f"--- {f.name} ---\n{f.read_text(encoding='utf-8')}")
+    return "\n\n".join(texts) if texts else "(No additional context documents provided.)"
+
+
+def _write_domain_file(domain_dir, filename, markers, parsed):
+    """Write a single domain file from parsed sections dict. Warns on missing markers."""
+    found = {m: parsed[m] for m in markers if m in parsed}
+    missing = [m for m in markers if m not in parsed]
+    if missing:
+        print(f"  WARNING: {filename} missing markers: {', '.join(missing)}")
+    if not found:
+        print(f"  WARNING: {filename} has no recognized markers, skipping")
+        return False
+    lines = []
+    for marker in markers:
+        if marker in found:
+            lines.append(f"<!-- {marker} -->")
+            lines.append(found[marker])
+            lines.append("")
+    (domain_dir / filename).write_text("\n".join(lines).strip() + "\n", encoding="utf-8")
+    return True
+
+
+def _build_adapt_prompt(prompt_name, profile_text, **extra):
+    """Load a meta-prompt and replace role/domain/profile placeholders."""
+    t = load_prompt(prompt_name)
+    t = t.replace("{ROLE}", ROLE)
+    t = t.replace("{COMPANY}", COMPANY)
+    t = t.replace("{DOMAIN}", DOMAIN)
+    t = t.replace("{AUDIENCE}", AUDIENCE)
+    t = t.replace("{PROFILE_CONTENT}", profile_text)
+    for key, value in extra.items():
+        t = t.replace("{" + key + "}", value)
+    return t
+
+
+def cmd_adapt(client, profile_name, force=False):
+    """Generate domain files via 3 API calls."""
+    print(f"\n=== ADAPT: {profile_name} (3 calls) ===\n")
     profile_dir = BASE_DIR / "profiles" / profile_name
-    adapted_dir = profile_dir / "adapted"
-    adapted_files = ["seeds.md", "coverage.md", "lenses.md", "gem-sections.md"]
+    domain_dir = profile_dir / "domain"
+    domain_dir.mkdir(parents=True, exist_ok=True)
 
-    # Skip if adapted files already non-stub (unless --force)
+    # Check if domain files already exist (skip unless --force)
+    domain_files = ["seeds.md", "coverage.md", "lenses.md", "gem-sections.md"]
     if not force:
-        all_real = all(not _is_stub(adapted_dir / f) for f in adapted_files)
-        if all_real:
-            print("  Adapted files already exist. Use --force to regenerate.")
+        existing = [f for f in domain_files if not _is_stub(domain_dir / f)]
+        if existing:
+            print(f"  Domain files already exist: {', '.join(existing)}")
+            print(f"  Use --force to regenerate.")
             return True
 
-    # Read profile.md for context
-    profile_path = profile_dir / "profile.md"
-    profile_text = profile_path.read_text(encoding="utf-8")
+    # Read profile text + context docs
+    profile_text = (profile_dir / "profile.md").read_text(encoding="utf-8")
+    context_docs = _gather_context_docs()
 
-    # Call LLM
-    prompt = setup_prompt(profile_text)
-    resp = call_llm(client, _setup_instructions(), prompt, label="Setup adapted files")
-    if not resp:
-        print("  FAIL: LLM returned no response")
+    # Call 1: meta-seeds -> seeds.md + coverage.md
+    print("  1/3: Generating seeds + coverage framework...")
+    prompt1 = _build_adapt_prompt("meta-seeds", profile_text,
+                                   CONTEXT_DOCS=context_docs)
+    resp1 = call_llm(client, _adapt_instructions(), prompt1, label="Seeds + Coverage")
+    if not resp1:
+        print("  FAILED: call 1 (seeds + coverage)")
         return False
+    (RAW_DIR / f"adapt-1-seeds.md").write_text(resp1, encoding="utf-8")
 
-    # Save raw response
-    RAW_DIR.mkdir(parents=True, exist_ok=True)
-    (RAW_DIR / "setup-raw.md").write_text(resp, encoding="utf-8")
-    print(f"  Raw response saved to {RAW_DIR / 'setup-raw.md'}")
+    parsed1 = _parse_domain_sections(resp1)
+    _write_domain_file(domain_dir, "seeds.md", ["DOMAIN_SEEDS"], parsed1)
+    _write_domain_file(domain_dir, "coverage.md", ["COVERAGE_FRAMEWORK"], parsed1)
 
-    # Parse response into files
-    parsed = _parse_setup_response(resp)
-    if not parsed:
-        print("  ERROR: Could not parse response. Check setup-raw.md")
+    # Call 2: meta-lenses -> lenses.md
+    print("  2/3: Generating lenses...")
+    prompt2 = _build_adapt_prompt("meta-lenses", profile_text)
+    resp2 = call_llm(client, _adapt_instructions(), prompt2, label="Lenses")
+    if not resp2:
+        print("  FAILED: call 2 (lenses)")
         return False
+    (RAW_DIR / f"adapt-2-lenses.md").write_text(resp2, encoding="utf-8")
 
-    # Validate and write each file
-    adapted_dir.mkdir(parents=True, exist_ok=True)
-    written = 0
-    for fname in adapted_files:
-        if fname not in parsed:
-            print(f"  WARNING: {fname} not found in LLM response")
-            continue
-        content = parsed[fname]
-        # Validate that the file has marker sections
-        sections = _parse_adapted_sections(content)
-        if not sections:
-            print(f"  WARNING: {fname} has no <!-- MARKER --> sections")
-        (adapted_dir / fname).write_text(content, encoding="utf-8")
-        print(f"  Wrote {fname} ({len(sections)} sections: {', '.join(sections.keys())})")
-        written += 1
+    parsed2 = _parse_domain_sections(resp2)
+    _write_domain_file(domain_dir, "lenses.md",
+                       ["DOMAIN_LENS", "NITTY_GRITTY_LAYOUT", "DOMAIN_REQUIREMENTS",
+                        "DISTILL_REQUIREMENTS", "STAKEHOLDERS"], parsed2)
 
-    if written == 0:
-        print("  ERROR: No files written. Check setup-raw.md")
+    # Call 3: meta-gem -> gem-sections.md (includes seeds from call 1)
+    print("  3/3: Generating gem sections...")
+    seeds_content = parsed1.get("DOMAIN_SEEDS", "")
+    prompt3 = _build_adapt_prompt("meta-gem", profile_text,
+                                   SEEDS_CONTENT=seeds_content)
+    resp3 = call_llm(client, _adapt_instructions(), prompt3, label="Gem Sections")
+    if not resp3:
+        print("  FAILED: call 3 (gem sections)")
         return False
+    (RAW_DIR / f"adapt-3-gem.md").write_text(resp3, encoding="utf-8")
 
-    # Reload _ADAPTED global so subsequent commands see the new content
-    global _ADAPTED
-    _ADAPTED = _load_adapted(profile_name)
+    parsed3 = _parse_domain_sections(resp3)
+    _write_domain_file(domain_dir, "gem-sections.md",
+                       ["GEM_BOOKSHELF", "GEM_EXAMPLES", "GEM_CODING",
+                        "GEM_FORMAT_EXAMPLES"], parsed3)
 
-    print(f"\n=== SETUP COMPLETE: {written}/{len(adapted_files)} files written ===\n")
+    print(f"\n=== ADAPT COMPLETE ===")
+    print(f"  Domain files written to {domain_dir}/")
+    print(f"  Next: python prep.py syllabus --profile {profile_name}")
+    print()
     return True
 
 
@@ -1042,6 +1064,12 @@ def _profile_summary(name):
     episodes_dir = profile_dir / "outputs" / "episodes"
     gem_dir = profile_dir / "outputs" / "gem"
 
+    domain_dir = profile_dir / "domain"
+    domain_files = ["seeds.md", "coverage.md", "lenses.md", "gem-sections.md"]
+    domain_ready = domain_dir.is_dir() and all(
+        not _is_stub(domain_dir / f) for f in domain_files
+    )
+
     agendas = len(list(syllabus_dir.glob("episode-*-agenda.md"))) if syllabus_dir.exists() else 0
     content = len(list(episodes_dir.glob("episode-*-content.md"))) if episodes_dir.exists() else 0
     gems = len(list(gem_dir.glob("gem-*.md"))) if gem_dir.exists() else 0
@@ -1052,6 +1080,8 @@ def _profile_summary(name):
         stage = "content generated"
     elif agendas > 0:
         stage = "syllabus generated"
+    elif domain_ready:
+        stage = "domain ready"
     else:
         stage = "profile created"
 
@@ -1068,6 +1098,10 @@ def cmd_status(profile_name=None):
 
         # Pipeline checklist
         profile_dir = BASE_DIR / "profiles" / profile_name
+        domain_dir = profile_dir / "domain"
+        domain_files = ["seeds.md", "coverage.md", "lenses.md", "gem-sections.md"]
+        domain_count = sum(1 for f in domain_files if not _is_stub(domain_dir / f))
+        domain_total = len(domain_files)
         agenda_count = sum(1 for ep in ALL_EPS if find_agenda(ep))
         content_count = sum(1 for ep in ALL_EPS if find_content(ep))
         gem_count = len(list(GEM_DIR.glob("gem-*.md"))) if GEM_DIR.exists() else 0
@@ -1075,12 +1109,15 @@ def cmd_status(profile_name=None):
 
         print("  Pipeline:")
         print(f"    [x] Profile created          {profile_dir / 'profile.md'}")
+        print(f"    [{'x' if domain_count == domain_total else ' '}] Domain files             {domain_dir}/ ({domain_count}/{domain_total} files)")
         print(f"    [{'x' if agenda_count == total else ' '}] Syllabus generated       {SYLLABUS_DIR}/ ({agenda_count}/{total} agendas)")
         print(f"    [{'x' if content_count == total else ' '}] Content generated        {EPISODES_DIR}/ ({content_count}/{total} episodes)")
         print(f"    [{'x' if gem_count > 0 else ' '}] Packaged                 {GEM_DIR}/ ({gem_count} gem files)")
 
         # Next command
-        if agenda_count < total:
+        if domain_count < domain_total:
+            print(f"\n  Next: python prep.py adapt --profile {profile_name}")
+        elif agenda_count < total:
             print(f"\n  Next: python prep.py syllabus --profile {profile_name}")
         elif content_count < total:
             print(f"\n  Next: python prep.py content --profile {profile_name}")
@@ -1105,62 +1142,6 @@ def cmd_status(profile_name=None):
             print()
 
     _show_pipeline_status()
-
-def cmd_validate(profile_name):
-    """Run all pre-pipeline checks and report every issue (not just the first)."""
-    issues = []
-
-    print(f"\n=== VALIDATE: {profile_name} ===\n")
-
-    # 1. API key
-    api_key = os.environ.get("OPENAI_API_KEY", "")
-    if api_key:
-        print("  [x] API key              set")
-    else:
-        print("  [ ] API key              not set")
-        issues.append("OPENAI_API_KEY not set")
-
-    # 2. Profile fields (already validated by set_profile/load_profile)
-    print(f"  [x] Profile              {ROLE} @ {COMPANY} ({DOMAIN})")
-
-    # 3 & 4. Adapted files: non-stub + expected markers
-    adapted_dir = BASE_DIR / "profiles" / profile_name / "adapted"
-    for fname, expected in _ADAPTED_EXPECTED_MARKERS.items():
-        fpath = adapted_dir / fname
-        if _is_stub(fpath):
-            print(f"  [ ] adapted/{fname:20s} stub or missing")
-            issues.append(f"adapted/{fname} is stub or missing")
-        else:
-            text = fpath.read_text(encoding="utf-8")
-            sections = _parse_adapted_sections(text)
-            missing = [m for m in expected if m not in sections]
-            if missing:
-                print(f"  [ ] adapted/{fname:20s} missing {', '.join(missing)}")
-                issues.append(f"adapted/{fname} missing {', '.join(missing)}")
-            else:
-                count = len(expected)
-                label = f"{count} marker{'s' if count != 1 else ''}"
-                if count == 1:
-                    label = f"1 marker ({expected[0]})"
-                print(f"  [x] adapted/{fname:20s} {label}")
-
-    # 5. Prompt files
-    prompt_names = ["syllabus.md", "content.md", "distill.md"]
-    missing_prompts = [n for n in prompt_names if not (PROMPTS / n).exists()]
-    if missing_prompts:
-        print(f"  [ ] Prompts              missing {', '.join(missing_prompts)}")
-        issues.append(f"missing prompt files: {', '.join(missing_prompts)}")
-    else:
-        print(f"  [x] Prompts              {', '.join(prompt_names)}")
-
-    # Summary
-    if issues:
-        print(f"\n=== {len(issues)} issue{'s' if len(issues) != 1 else ''} found ===\n")
-    else:
-        print(f"\n=== all checks passed ===\n")
-
-    return len(issues) == 0
-
 
 # Cost per API call by model prefix (rough estimates in USD)
 _COST_PER_CALL = {
@@ -1269,12 +1250,7 @@ def write_manifest():
 
 
 def cmd_init(name):
-    """Create a new profile skeleton with template profile.md and adapted/ stubs."""
-    if not re.match(r'^[a-zA-Z0-9][a-zA-Z0-9_-]*$', name):
-        print(f"ERROR: Profile name must start with a letter/digit and contain only letters, digits, hyphens, underscores.")
-        print(f"  Got: {name}")
-        sys.exit(1)
-
+    """Create a new profile skeleton with template profile.md and domain/ stubs."""
     profile_dir = BASE_DIR / "profiles" / name
     if profile_dir.exists():
         print(f"ERROR: profile '{name}' already exists at {profile_dir}/")
@@ -1284,7 +1260,7 @@ def cmd_init(name):
     for subdir in ["inputs/agendas", "inputs/episodes", "inputs/misc",
                    "outputs/syllabus", "outputs/episodes", "outputs/gem",
                    "outputs/notebooklm", "outputs/raw",
-                   "adapted"]:
+                   "domain"]:
         (profile_dir / subdir).mkdir(parents=True, exist_ok=True)
 
     # Write template profile.md
@@ -1306,41 +1282,45 @@ def cmd_init(name):
     )
     (profile_dir / "profile.md").write_text(template, encoding="utf-8")
 
-    # Write adapted/ stub files with guidance comments
+    # Write domain/ stub files with guidance comments
     _stubs = {
         "seeds.md": (
             "<!-- STUB: Episode seed data for syllabus generation -->\n"
             "<!-- Replace this file with your domain's episode seeds.\n"
             "     Use <!-- DOMAIN_SEEDS --> as the section header.\n"
-            "     See profiles/security-infra/adapted/seeds.md for an example.\n"
-            "     Generate this file using prompts/intake.md in any AI chat. -->\n"
+            "     See profiles/security-infra/domain/seeds.md for an example.\n"
+            "     Generate via: python prep.py adapt --profile {name}\n"
+            "     Or manually using prompts/intake.md in any AI chat. -->\n"
         ),
         "coverage.md": (
             "<!-- STUB: Coverage framework for syllabus generation -->\n"
             "<!-- Replace this file with your domain's coverage framework.\n"
             "     Use <!-- COVERAGE_FRAMEWORK --> as the section header.\n"
-            "     See profiles/security-infra/adapted/coverage.md for an example.\n"
-            "     Generate this file using prompts/intake.md in any AI chat. -->\n"
+            "     See profiles/security-infra/domain/coverage.md for an example.\n"
+            "     Generate via: python prep.py adapt --profile {name}\n"
+            "     Or manually using prompts/intake.md in any AI chat. -->\n"
         ),
         "lenses.md": (
             "<!-- STUB: Domain lenses for content and distill prompts -->\n"
             "<!-- Replace this file with your domain's lenses.\n"
             "     Required sections: <!-- DOMAIN_LENS -->, <!-- NITTY_GRITTY_LAYOUT -->,\n"
             "     <!-- DOMAIN_REQUIREMENTS -->, <!-- DISTILL_REQUIREMENTS -->, <!-- STAKEHOLDERS -->\n"
-            "     See profiles/security-infra/adapted/lenses.md for an example.\n"
-            "     Generate this file using prompts/intake.md in any AI chat. -->\n"
+            "     See profiles/security-infra/domain/lenses.md for an example.\n"
+            "     Generate via: python prep.py adapt --profile {name}\n"
+            "     Or manually using prompts/intake.md in any AI chat. -->\n"
         ),
         "gem-sections.md": (
             "<!-- STUB: Domain-specific Gem coaching bot sections -->\n"
             "<!-- Replace this file with your domain's gem sections.\n"
             "     Required sections: <!-- GEM_BOOKSHELF -->, <!-- GEM_EXAMPLES -->,\n"
             "     <!-- GEM_CODING -->, <!-- GEM_FORMAT_EXAMPLES -->\n"
-            "     See profiles/security-infra/adapted/gem-sections.md for an example.\n"
-            "     Generate this file using prompts/intake.md in any AI chat. -->\n"
+            "     See profiles/security-infra/domain/gem-sections.md for an example.\n"
+            "     Generate via: python prep.py adapt --profile {name}\n"
+            "     Or manually using prompts/intake.md in any AI chat. -->\n"
         ),
     }
     for fname, content in _stubs.items():
-        (profile_dir / "adapted" / fname).write_text(content, encoding="utf-8")
+        (profile_dir / "domain" / fname).write_text(content, encoding="utf-8")
 
     print(f"Created profile '{name}' at {profile_dir}/")
     print(f"""
@@ -1349,10 +1329,10 @@ Next steps:
        {profile_dir / 'profile.md'}
      Fill in role, company, domain, and other fields.
 
-  2. Generate domain-specific content (choose one):
-     a) Automated:  python3 prep.py setup --profile {name}
-     b) Manual:     Paste prompts/intake.md into any AI chat.
-                    Save the generated files into {profile_dir / 'adapted'}/
+  2. Generate domain-specific content:
+       Option A (automated): python prep.py adapt --profile {name}
+       Option B (manual):    Paste prompts/intake.md into any AI chat,
+                             save files into {profile_dir / 'domain'}/
 
   3. Check your profile:
        python prep.py status --profile {name}
@@ -1393,7 +1373,7 @@ def cmd_all(client, force=False):
 def main():
     sys.stdout.reconfigure(encoding="utf-8")
     p = argparse.ArgumentParser(description="Interview Prep Pipeline")
-    p.add_argument("command", choices=["all","syllabus","content","add","setup","package","status","validate","render","init"])
+    p.add_argument("command", choices=["all","syllabus","content","add","adapt","package","status","render","init"])
     p.add_argument("file", nargs="?", help="File path for 'add'/'render', or profile name for 'init'")
     p.add_argument("--profile", type=str, default=None,
                    help="Profile name (uses profiles/{name}/ for config and data)")
@@ -1416,10 +1396,9 @@ def main():
         cmd_init(name)
         return
 
-    # API commands and validate require --profile
-    _API_COMMANDS = {"all", "syllabus", "content", "add", "setup"}
-    _PROFILE_REQUIRED = _API_COMMANDS | {"validate"}
-    if args.command in _PROFILE_REQUIRED and not args.profile:
+    # API commands require --profile
+    _API_COMMANDS = {"all", "syllabus", "content", "add", "adapt"}
+    if args.command in _API_COMMANDS and not args.profile:
         print(f"ERROR: --profile required for '{args.command}'.")
         print(f"  Run 'python prep.py init <name>' to create a profile.")
         sys.exit(1)
@@ -1439,11 +1418,10 @@ def main():
         p.error(f"--episode must be one of {ALL_EPS[0]}-{ALL_EPS[-1]}")
 
     # Only create dirs for write commands
-    if args.command in ("all", "syllabus", "content", "add", "setup", "package"):
+    if args.command in ("all", "syllabus", "content", "add", "adapt", "package"):
         ensure_dirs()
 
     if args.command == "status":   cmd_status(profile_name=args.profile); return
-    if args.command == "validate": sys.exit(0 if cmd_validate(args.profile) else 1)
     if args.command == "package":  cmd_package(); return
     if args.command == "render":
         if not args.file:
@@ -1454,15 +1432,6 @@ def main():
             print(f"ERROR: {rp} not found")
             sys.exit(1)
         print(render_template(rp.read_text(encoding="utf-8")), end="")
-        return
-
-    # Setup runs BEFORE preflight — stubs are expected, that's the whole point
-    if args.command == "setup":
-        client = get_client()
-        if not _confirm_cost(1, yes=args.yes):
-            print("Cancelled.")
-            return
-        cmd_setup(client, args.profile, force=args.force)
         return
 
     # Pre-flight validation before API calls (runs before get_client / cost confirmation)
@@ -1477,6 +1446,7 @@ def main():
         "syllabus": len(SYLLABUS_RUNS),
         "content": 1 if args.episode else len(ALL_EPS),
         "add": 2,  # distill + content
+        "adapt": 3,  # seeds+coverage, lenses, gem
     }
     num_calls = call_counts.get(args.command, 0)
     if num_calls and not _confirm_cost(num_calls, yes=args.yes):
@@ -1489,6 +1459,7 @@ def main():
         if ok:
             _print_syllabus_review(args.profile)
     elif args.command == "content":  cmd_content(client, force, episode=args.episode)
+    elif args.command == "adapt":    cmd_adapt(client, args.profile, force)
     elif args.command == "add":
         if not args.file:
             print("Usage: python prep.py add <file> [--gem-slot N]")

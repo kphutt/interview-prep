@@ -2,7 +2,7 @@
 
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue?logo=python&logoColor=white)](https://www.python.org)
 [![License: MIT](https://img.shields.io/badge/license-MIT-yellow.svg)](LICENSE)
-[![Tests: passing](https://img.shields.io/badge/tests-passing-brightgreen)]()
+[![Tests: 307 passed](https://img.shields.io/badge/tests-307_passed-brightgreen)]()
 
 Preparing for a Staff+ technical interview? This tool generates a personalized study syllabus for your domain, then turns each episode into a deep-dive document you can study from, listen to as a podcast (via NotebookLM), or practice with an AI coaching bot (via Gemini Gem).
 
@@ -35,8 +35,20 @@ Each stage is idempotent and resumable — commands skip files that already exis
 A complete Security & Infrastructure profile ships with the repo:
 
 ```bash
-python3 prep.py status --profile security-infra
-ls profiles/security-infra/outputs/episodes/
+pip install -r requirements.txt
+
+cp .env.example .env
+# Edit .env: add your OPENAI_API_KEY
+
+# Load config
+set -a && source .env && set +a
+
+# Create a profile for your domain
+python prep.py init my-domain
+
+# Generate domain content (see "Adapting to a New Domain" below)
+# Then generate everything:
+python prep.py all --profile my-domain
 ```
 
 ### Run the smoketest (pennies, ~1 min)
@@ -125,8 +137,8 @@ Every interview domain lives in its own profile under `profiles/<name>/`. A prof
 ```
 profiles/my-domain/
   profile.md           <- Config: role, company, domain, model, episode counts
-  adapted/             <- Domain-specific content injected into shared prompts
-    seeds.md             Episode seed data
+  domain/              <- Domain-specific content injected into shared prompts
+    seeds.md             Episode seed data (12 episodes)
     coverage.md          Coverage framework (e.g., CISSP, DAMA-DMBOK)
     lenses.md            Domain lens, Nitty Gritty layout, requirements, stakeholders
     gem-sections.md      Gem coaching bot: bookshelf, examples, format
@@ -142,11 +154,72 @@ profiles/my-domain/
     raw/                 Raw API responses (backup)
 ```
 
-The reference profile `profiles/security-infra/` ships with complete adapted files and generated content.
+The reference profile `profiles/security-infra/` ships with complete domain files and generated content.
 
-### Adapted file format
+## Commands
 
-Adapted files use `<!-- MARKER_NAME -->` HTML comment delimiters to define sections. Each marker corresponds to a placeholder in the shared prompt templates. See `profiles/security-infra/adapted/` for a complete example.
+All API commands (`all`, `syllabus`, `content`, `add`, `adapt`) require `--profile`.
+
+| Command | What it does |
+|---------|-------------|
+| `prep.py init <name>` | Create new profile skeleton with domain/ stubs |
+| `prep.py adapt --profile P` | Generate domain files (3 API calls, ~$5-10) |
+| `prep.py all --profile P` | Full pipeline: syllabus -> content -> package |
+| `prep.py syllabus --profile P` | Generate agendas only (8 API calls) |
+| `prep.py content --profile P` | Generate content for existing agendas |
+| `prep.py content --profile P --episode 5` | Generate content for one episode |
+| `prep.py add doc.pdf --profile P` | Distill doc -> content -> package |
+| `prep.py package --profile P` | Repackage outputs into Gem + NotebookLM |
+| `prep.py render prompts/gem.md --profile P` | Substitute vars and print to stdout |
+| `prep.py status` | List all profiles |
+| `prep.py status --profile P` | Show pipeline progress for a profile |
+
+Common flags: `--force` (regenerate existing), `--yes` (skip cost confirmation).
+
+## Adapting to a New Domain
+
+### 1. Create a profile
+
+```bash
+python prep.py init data-eng
+```
+
+This creates `profiles/data-eng/` with a template `profile.md` and 4 stub files in `domain/`.
+
+### 2. Generate domain content
+
+**Option A: Automated** (~$5-10, 3 API calls)
+```bash
+# Edit profiles/data-eng/profile.md first (fill in role, company, domain)
+python prep.py adapt --profile data-eng --yes
+```
+
+**Option B: Manual** ($0)
+Paste `prompts/intake.md` into any AI chat (ChatGPT, Claude, Gemini). The intake prompt interviews you about your role, domain, and sub-areas, then generates all 5 files (`profile.md` + 4 domain files) ready to copy-paste.
+
+### 3. Fill in your profile
+
+Save the generated files:
+- `profiles/data-eng/profile.md`
+- `profiles/data-eng/domain/seeds.md`
+- `profiles/data-eng/domain/coverage.md`
+- `profiles/data-eng/domain/lenses.md`
+- `profiles/data-eng/domain/gem-sections.md`
+
+### 4. Generate content
+
+```bash
+# Test run with a cheap model first
+python prep.py syllabus --profile data-eng --yes
+
+# Review agendas in profiles/data-eng/outputs/syllabus/
+# If satisfied, generate full content:
+python prep.py all --profile data-eng --yes
+```
+
+### Domain file format
+
+Domain files use `<!-- MARKER_NAME -->` HTML comment delimiters to define sections. Each marker corresponds to a placeholder in the shared prompt templates. See `profiles/security-infra/domain/` for a complete example.
 
 | File | Markers | Injected into |
 |------|---------|--------------|
@@ -214,29 +287,7 @@ If you'd rather not use the API for domain setup, you can generate your adapted 
 5. Run `python3 prep.py status --profile my-domain` to confirm markers are detected
 6. Continue with `python3 prep.py all --profile my-domain`
 
-This replaces the `prep.py setup` step in [Quick Start](#quick-start) — everything else in the pipeline works the same.
-
-## Example Output
-
-**Sample episode titles** (from the Security & Infrastructure reference profile):
-
-- Ep 1 — The Binding Problem: mTLS vs DPoP for Sender-Constrained OAuth Tokens
-- Ep 2 — The Session Kill Switch: Event-Driven Revocation with CAEP/RISC
-- Ep 3 — Mobile Identity: Defeating the Confused Deputy with Universal/App Links + PKCE
-- Ep 5 — BeyondCorp: Building a Zero-Trust Proxy (Identity-Aware Access Without the VPN)
-- Ep 8 — Supply Chain Security: SLSA Provenance + Deploy-Time Verification
-- Ep 10 — Crypto Agility (Post-Quantum): Hybrid TLS + "Rotate the Math Without a Code Push"
-- Ep 11 — Envelope Encryption: Rotate Access to Petabytes by Re-wrapping Keys, Not Data
-
-**Sample content depth** (from Episode 1 — Hook section):
-
-> Bearer JWTs are spendable "anywhere, immediately" once copied (logs, headers, JS); sender-constraint reduces replay, but only if enforcement happens at the right hop (edge vs app) without introducing a new single point of failure.
->
-> mTLS binding is operationally "clean" for controlled server-to-server clients, but certificate issuance/rotation/revocation is a full product with pager load; adoption failures tend to be spiky and correlated (one bad renewal script can take out a partner cohort).
->
-> DPoP fits public clients (mobile/SPAs) but shifts cost to the hot path: per-request signed proofs + replay caches + nonce retry logic; at 200k RPS the CPU and p99 budget impact is real, not theoretical.
-
-Browse the full reference profile: `profiles/security-infra/outputs/episodes/`
+Tip: test with `gpt-4o-mini` first to validate your domain content, then regenerate with a stronger model.
 
 ## Environment Variables
 
@@ -258,7 +309,26 @@ When using `--profile`, values in `profile.md` take precedence over env vars.
 
 The pipeline shows a cost estimate before each run and asks for confirmation. Use `--yes` to skip the confirmation prompt. Cost depends on model, episode count, and reasoning effort.
 
-Tip: test with `gpt-4o-mini` first to validate your adapted content, then regenerate with a stronger model.
+307 tests covering prompt assembly, template structure, domain file injection, preflight validation, profile management, adapt command, file helpers, skip/resume logic, packaging, manifest generation, and edge cases.
+
+## Platform Prompts
+
+The `prompts/` directory includes:
+
+| Prompt | Purpose |
+|--------|---------|
+| `syllabus.md` | Syllabus generation (8 chunked runs: scaffold, core batches, frontiers, merge) |
+| `content.md` | Episode content generation (dense Staff-level technical documents) |
+| `distill.md` | Document distillation (whitepaper/blog -> episode agenda) |
+| `gem.md` | Gemini Gem coaching bot system prompt |
+| `notebooklm.md` | NotebookLM podcast generation prompt |
+| `notebooklm-frames.md` | Per-episode podcast frames |
+| `intake.md` | Domain intake interview (generates domain files, $0 cost) |
+| `meta-seeds.md` | Seeds + coverage generation (used by `adapt` command) |
+| `meta-lenses.md` | Domain lenses generation (used by `adapt` command) |
+| `meta-gem.md` | Gem sections generation (used by `adapt` command) |
+
+All prompts use `{PLACEHOLDER}` syntax. Role/company/domain vars are replaced first, then domain content, then user content. This ordering prevents double-replacement when user content contains `{braces}`.
 
 ## API Details
 

@@ -4,7 +4,7 @@ company: Acme
 domain: Backend
 audience: hiring manager
 core_episodes: 1
-frontier_episodes: 1
+frontier_episodes: 0
 model: gpt-4o-mini
 effort: low
 as_of: 2026-02-15

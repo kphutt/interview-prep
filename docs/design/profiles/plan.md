@@ -15,7 +15,7 @@ Cross-references: [brainstorm.md](brainstorm.md) | [decisions.md](decisions.md) 
 | 2 | Template unification + syllabus adaptation | Done |
 | 3 | Profile directory + config | Done |
 | 4 | Domain-agnostic prompts | Done |
-| 5 | Intake + meta-prompt | Done (5.2-5.3 superseded by `setup` command) |
+| 5 | `adapt` command + `domain/` rename | Done |
 
 Side quests:
 - Smoke test: dry-run mode, test prompts, input/output display (done)

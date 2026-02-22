@@ -1,7 +1,7 @@
 # Domain Intake — Interview Prep Pipeline
 
 Paste this prompt into any AI chat (ChatGPT, Claude, Gemini, etc.) to generate
-the domain-adapted files for a new interview prep profile.
+the domain files for a new interview prep profile.
 
 Cost: $0 — runs entirely in an external AI conversation.
 
@@ -54,7 +54,7 @@ as_of: "<current month and year>"
 <1-2 sentences about this profile>
 ```
 
-### File 2: `adapted/seeds.md`
+### File 2: `domain/seeds.md`
 
 Episode seed data for syllabus generation. This is the most important file — it defines depth and content for 12 core episodes.
 
@@ -88,7 +88,7 @@ Rules for episode seeds:
 - Distribute episodes across all sub-areas (2-3 episodes per sub-area for 4-6 sub-areas)
 - Episodes should progress from foundational → advanced within each sub-area
 
-### File 3: `adapted/coverage.md`
+### File 3: `domain/coverage.md`
 
 Coverage framework for syllabus generation.
 
@@ -108,7 +108,7 @@ If no standard framework applies, create a custom one:
    - Ensure coverage across all areas at least once across the full syllabus.
 ```
 
-### File 4: `adapted/lenses.md`
+### File 4: `domain/lenses.md`
 
 Domain lenses for content and distill prompts. Must have exactly these 5 sections:
 
@@ -144,7 +144,7 @@ Domain lenses for content and distill prompts. Must have exactly these 5 section
 
 The Nitty Gritty layout subsections 1-2 should be domain-specific (e.g., "Protocol / Wire Details" for security, "Pipeline Architecture / DAG Design" for data engineering). Subsections 3-6 are standard across domains.
 
-### File 5: `adapted/gem-sections.md`
+### File 5: `domain/gem-sections.md`
 
 Domain-specific sections for the Gemini Gem coaching bot. Must have exactly these 4 sections:
 
@@ -192,6 +192,6 @@ The Bookshelf should be a 4-6 row reference table mapping domain layers/abstract
 
 Tell me to:
 1. Save `profile.md` to `profiles/<name>/profile.md`
-2. Save the 4 adapted files to `profiles/<name>/adapted/`
+2. Save the 4 domain files to `profiles/<name>/domain/`
 3. Run `python prep.py syllabus --profile <name> --yes` to generate the syllabus
 4. Review the agendas, then run `python prep.py content --profile <name> --yes`
