@@ -1,4 +1,4 @@
-# Design backlog
+# Roadmap
 
 Prioritized by what helps new users get started and get value fastest.
 
@@ -78,38 +78,12 @@ Incorporate interviewer info (LinkedIn profiles, published articles) to tailor c
 
 ## Done
 
-### ~~Meta-prompt workflow~~
-
-Promoted to [profiles brainstorm](profiles/brainstorm.md#meta-prompt-workflow).
-
-### ~~Model-agnostic API calls~~ ✅
-
-Done. `_MODEL_CAPS` now carries per-model allowed effort levels, `_clamp_effort()` adjusts invalid efforts to the nearest valid level, and `call_llm()` has a `BadRequestError` safety net that strips unsupported params on 400s. Cost table updated with `gpt-5.2-pro` and `gpt-4o-mini`.
-
-### ~~Defensive validation hardening~~ ✅
-
-Done. Four guards added: blank required profile fields error with specific message, `cmd_content` suggests running syllabus when all agendas missing, `cmd_init` validates profile names against `^[a-zA-Z0-9][a-zA-Z0-9_-]*$`, and `cmd_add` catches `UnicodeDecodeError` on binary files.
-
-### ~~Friction and manual-step audit~~ ✅
-
-Done. Audit document at [docs/design/friction-audit.md](friction-audit.md) catalogs 19 friction points across 10 pipeline steps (3 High, 7 Medium, 9 Low). E2E smoke test (`TestFullPipelineSmoke`) exercises init → setup → syllabus → content → package → status → render with mocked API calls. Findings added to backlog: `validate` command, NotebookLM batch setup docs.
-
-### ~~`prep.py validate` command~~ ✅
-
-Done. `cmd_validate()` checks API key, profile fields, adapted file markers, and prompt files — reports all issues at once (not exit-on-first-error like `_preflight_check`). Exits 0/1. Five tests in `TestCmdValidate`.
-
-### ~~Smoketest `--force` in README~~ ✅
-
-Done. `cmd_all` detects a fully-complete pipeline and tells the user to re-run with `--force` instead of silently skipping. README snippet updated with `# add --force to re-run` comment.
-
-### ~~Partial failure exit codes~~ ✅
-
-Done. `cmd_content` now tracks failures, prints the count in the summary line, and returns `False` when any episode fails.
-
-### ~~Remove `prep-backup.py`~~ ✅
-
-Not needed — file exists locally but is already gitignored by `*-backup.py` and not tracked.
-
-### ~~Profile-only mode cleanup~~ ✅
-
-Done. Smoke test rewritten to use `--profile` throughout (init → populate domain → all/package). Both dry-run and live paths exercise profile mode. Smoketest profile uses `frontier_episodes: 0` to avoid flaky parsing with cheap models. Validation relaxed to allow 0 frontier episodes.
+- ~~Meta-prompt workflow~~ — Promoted to [profiles brainstorm](docs/design/profiles/brainstorm.md#meta-prompt-workflow).
+- ~~Model-agnostic API calls~~ ✅ — `_MODEL_CAPS`, `_clamp_effort()`, `BadRequestError` safety net.
+- ~~Defensive validation hardening~~ ✅ — Blank field errors, missing syllabus hints, profile name validation, binary file guard.
+- ~~Friction and manual-step audit~~ ✅ — [Audit doc](docs/design/friction-audit.md): 19 friction points, E2E smoke test.
+- ~~`prep.py validate` command~~ ✅ — Checks API key, profile fields, adapted markers, prompt files.
+- ~~Smoketest `--force` in README~~ ✅ — Auto-detects complete pipeline, suggests `--force`.
+- ~~Partial failure exit codes~~ ✅ — `cmd_content` tracks and reports failures.
+- ~~Remove `prep-backup.py`~~ ✅ — Already gitignored, not tracked.
+- ~~Profile-only mode cleanup~~ ✅ — Smoke test uses `--profile` throughout.

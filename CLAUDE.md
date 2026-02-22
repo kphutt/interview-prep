@@ -68,12 +68,10 @@ Tests use `unittest` with `MagicMock` for the OpenAI client. Many tests redirect
 - Generated content in `profiles/security-infra/outputs/` is committed (it cost ~$50 to generate)
 - `.env` is gitignored; `.env.example` is committed
 
-## Design docs
+## Project docs
 
-Design documents live in `docs/design/`. Convention:
+- `ROADMAP.md` — Prioritized big rocks (the PM view). What's next at a glance.
+- `docs/decisions/NNNN-short-title.md` — One decision per file, append-only, never edited. Captures why, not what.
+- `docs/design/{initiative}/brainstorm.md` — Optional scratchpad for exploring an initiative (sub-tasks, open questions, half-baked ideas).
 
-- `backlog.md` — Ideas not yet tied to an initiative (short paragraphs)
-- `{initiative}/brainstorm.md` — Exploration, specs, open questions, code impact
-- `{initiative}/decisions.md` — Settled choices (extracted from brainstorm, append-only)
-
-Lifecycle: backlog item → initiative folder with brainstorm → decisions extracted as they're made.
+Lifecycle: roadmap item → optional brainstorm → decisions graduate to `docs/decisions/` as they're settled.
