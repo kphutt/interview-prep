@@ -66,10 +66,6 @@ The Gem interview coach reveals gaps during practice — topics where answers ar
 
 Mutable globals modified by `set_profile()` and `_reconfigure()` create implicit coupling. Tests save/restore these globals in setUp/tearDown. Refactor to a `PrepConfig` class passed explicitly to functions. Unblocks clean file splitting if codebase grows. Separate design initiative.
 
-### Profile-only mode cleanup
-
-Remove non-profile (global) code paths from `prep.py`. Today, commands like `package` and `render` work without `--profile` using module-level dir constants (`INPUTS`, `OUTPUTS`, etc.). These should require `--profile` or use a default profile, simplifying the codebase. Blocked on: smoke test rewrite to profile mode (proves profile mode works end-to-end).
-
 ### CONTRIBUTING.md
 
 No guide for contributors. Should cover: running tests, the global-save/restore pattern, why `.replace()` not `.format()`, profile system architecture.
@@ -113,3 +109,7 @@ Done. `cmd_content` now tracks failures, prints the count in the summary line, a
 ### ~~Remove `prep-backup.py`~~ ✅
 
 Not needed — file exists locally but is already gitignored by `*-backup.py` and not tracked.
+
+### ~~Profile-only mode cleanup~~ ✅
+
+Done. Smoke test rewritten to use `--profile` throughout (init → populate domain → all/package). Both dry-run and live paths exercise profile mode. Smoketest profile uses `frontier_episodes: 0` to avoid flaky parsing with cheap models. Validation relaxed to allow 0 frontier episodes.
