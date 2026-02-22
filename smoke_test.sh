@@ -8,27 +8,32 @@
 #   export OPENAI_API_KEY='sk-...'
 #
 # Usage:
-#   ./smoke_test.sh                         # default: gpt-4.1-mini, medium effort
+#   ./smoke_test.sh                         # live: gpt-4o-mini, effort low, 1+1 episodes
 #   ./smoke_test.sh --dry-run               # static fixtures, no API calls
-#   ./smoke_test.sh o4-mini medium          # reasoning model
-#   ./smoke_test.sh gpt-5.2-pro medium      # production model
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
+# --- Detect Python ---
+# macOS/Linux: python3, Windows (Git Bash): python or full path
+if command -v python3 &>/dev/null && python3 --version &>/dev/null; then
+    PYTHON=python3
+elif command -v python &>/dev/null && python --version &>/dev/null; then
+    PYTHON=python
+else
+    echo "ERROR: Python not found. Install Python 3.9+ and ensure it's on PATH."
+    exit 1
+fi
+
 # --- Parse flags ---
 DRY_RUN=0
-POSITIONAL=()
 for arg in "$@"; do
     case "$arg" in
         --dry-run) DRY_RUN=1 ;;
-        *) POSITIONAL+=("$arg") ;;
+        *) echo "Unknown argument: $arg"; exit 1 ;;
     esac
 done
-
-MODEL="${POSITIONAL[0]:-gpt-4.1-mini}"
-EFFORT="${POSITIONAL[1]:-medium}"
 
 # --- API key check (skip for dry-run) ---
 if [ "$DRY_RUN" -eq 0 ]; then
@@ -46,12 +51,12 @@ if [ "$DRY_RUN" -eq 0 ]; then
     fi
 fi
 
+PROFILE=smoke-test
+
 if [ "$DRY_RUN" -eq 1 ]; then
-    echo "=== SMOKE TEST (dry-run) ==="
+    echo "=== SMOKE TEST (dry-run, profile: $PROFILE) ==="
 else
-    echo "=== SMOKE TEST ==="
-    echo "  Model:  $MODEL"
-    echo "  Effort: $EFFORT"
+    echo "=== SMOKE TEST (profile: $PROFILE) ==="
 fi
 echo ""
 
@@ -69,87 +74,133 @@ if [ ! -d "$SCRIPT_DIR/tests/prompts" ]; then
     exit 1
 fi
 cp -r "$SCRIPT_DIR/tests/prompts" "$WORK/prompts"
+# Preflight validation requires distill.md even though `all` doesn't use it
+cp "$SCRIPT_DIR/prompts/distill.md" "$WORK/prompts/"
 
 cd "$WORK"
 
-# Create minimal directory structure
-mkdir -p inputs/agendas inputs/episodes inputs/misc
-mkdir -p outputs/syllabus outputs/episodes outputs/gem outputs/notebooklm outputs/raw
-
-# Run with 1 core episode, 0 frontiers for minimal cost
-export OPENAI_MODEL="$MODEL"
-export OPENAI_EFFORT="$EFFORT"
+# Only env var not covered by profile config
 export OPENAI_MAX_TOKENS=4000
-export PREP_CORE_EPISODES=1
-export PREP_FRONTIER_EPISODES=0
+
+# --- Setup: init + populate profile ---
+echo "--- Setting up profile ---"
+
+# 1. Create profile skeleton (tests init command)
+$PYTHON prep.py init $PROFILE
+
+# 2. Copy smoketest profile config + domain files
+cp "$SCRIPT_DIR/profiles/smoketest/profile.md" profiles/$PROFILE/profile.md
+cp "$SCRIPT_DIR/profiles/smoketest/domain/"* profiles/$PROFILE/domain/
+
+# 3. Verify init worked
+if [ -f profiles/$PROFILE/profile.md ]; then
+    echo "  OK: init created profile"
+else
+    echo "  FAIL: init failed"
+    exit 1
+fi
+echo ""
+
+FAIL=0
 
 if [ "$DRY_RUN" -eq 1 ]; then
     echo "--- Copying fixtures ---"
-    cp "$SCRIPT_DIR/tests/fixtures/syllabus/"* outputs/syllabus/
-    cp "$SCRIPT_DIR/tests/fixtures/episodes/"* outputs/episodes/
+    cp "$SCRIPT_DIR/tests/fixtures/syllabus/"* profiles/$PROFILE/outputs/syllabus/
+    cp "$SCRIPT_DIR/tests/fixtures/episodes/"* profiles/$PROFILE/outputs/episodes/
     echo "  Copied syllabus + episode fixtures"
     echo ""
     echo "--- Running package (no API calls) ---"
-    python3 prep.py package
+    $PYTHON prep.py package --profile $PROFILE
 else
-    echo "--- Running pipeline (1 core, 0 frontier) ---"
-    python3 prep.py all
+    echo "--- Running pipeline (profile: $PROFILE) ---"
+    $PYTHON prep.py all --profile $PROFILE
+fi
+
+echo ""
+echo "--- Status check ---"
+STATUS_OUT=$($PYTHON prep.py status --profile $PROFILE 2>&1)
+if echo "$STATUS_OUT" | grep -q "Domain files"; then
+    echo "  OK: status shows domain files"
+else
+    echo "  FAIL: status missing domain files"
+    FAIL=1
 fi
 
 echo ""
 echo "--- Verifying outputs ---"
 
-FAIL=0
-
 # Check agenda exists and is non-empty
-if [ -s outputs/syllabus/episode-01-agenda.md ]; then
-    echo "  OK: agenda exists ($(wc -c < outputs/syllabus/episode-01-agenda.md) bytes)"
+if [ -s profiles/$PROFILE/outputs/syllabus/episode-01-agenda.md ]; then
+    echo "  OK: agenda exists ($(wc -c < profiles/$PROFILE/outputs/syllabus/episode-01-agenda.md) bytes)"
 else
     echo "  FAIL: agenda missing or empty"
     FAIL=1
 fi
 
 # Check content exists and is non-empty
-if [ -s outputs/episodes/episode-01-content.md ]; then
-    echo "  OK: content exists ($(wc -c < outputs/episodes/episode-01-content.md) bytes)"
+if [ -s profiles/$PROFILE/outputs/episodes/episode-01-content.md ]; then
+    echo "  OK: content exists ($(wc -c < profiles/$PROFILE/outputs/episodes/episode-01-content.md) bytes)"
 else
     echo "  FAIL: content missing or empty"
     FAIL=1
 fi
 
 # Check gem file exists
-if [ -s outputs/gem/gem-1.md ]; then
-    echo "  OK: gem-1.md exists ($(wc -c < outputs/gem/gem-1.md) bytes)"
+if [ -s profiles/$PROFILE/outputs/gem/gem-1.md ]; then
+    echo "  OK: gem-1.md exists ($(wc -c < profiles/$PROFILE/outputs/gem/gem-1.md) bytes)"
 else
     echo "  FAIL: gem-1.md missing or empty"
     FAIL=1
 fi
 
 # Check notebooklm file exists
-if [ -s outputs/notebooklm/episode-01-content.md ]; then
+if [ -s profiles/$PROFILE/outputs/notebooklm/episode-01-content.md ]; then
     echo "  OK: notebooklm exists"
 else
     echo "  FAIL: notebooklm missing or empty"
     FAIL=1
 fi
 
+# --- Domain marker verification (dry-run only) ---
+if [ "$DRY_RUN" -eq 1 ]; then
+    echo ""
+    echo "--- Domain marker verification ---"
+    for marker in "DOMAIN_SEEDS" "COVERAGE_FRAMEWORK"; do
+        if grep -q "<!-- $marker -->" profiles/$PROFILE/domain/seeds.md 2>/dev/null || \
+           grep -q "<!-- $marker -->" profiles/$PROFILE/domain/coverage.md 2>/dev/null; then
+            echo "  OK: $marker marker found"
+        else
+            echo "  FAIL: $marker marker missing"
+            FAIL=1
+        fi
+    done
+    for marker in "DOMAIN_LENS" "STAKEHOLDERS"; do
+        if grep -q "<!-- $marker -->" profiles/$PROFILE/domain/lenses.md 2>/dev/null; then
+            echo "  OK: $marker marker found"
+        else
+            echo "  FAIL: $marker marker missing"
+            FAIL=1
+        fi
+    done
+fi
+
 echo ""
 echo "--- Prompts (input to API) ---"
 echo ""
-echo ">> Syllabus prompt (rendered):"
-python3 prep.py render prompts/syllabus.md
+echo ">> Syllabus prompt (rendered with profile):"
+$PYTHON prep.py render prompts/syllabus.md --profile $PROFILE
 echo ""
-echo ">> Content prompt (rendered):"
-python3 prep.py render prompts/content.md
+echo ">> Content prompt (rendered with profile + domain injection):"
+$PYTHON prep.py render "$SCRIPT_DIR/prompts/content.md" --profile $PROFILE
 
 echo ""
 echo "--- Generated output ---"
 echo ""
 echo ">> Agenda (first 20 lines):"
-head -20 outputs/syllabus/episode-01-agenda.md
+head -20 profiles/$PROFILE/outputs/syllabus/episode-01-agenda.md
 echo ""
 echo ">> Content (first 40 lines):"
-head -40 outputs/episodes/episode-01-content.md
+head -40 profiles/$PROFILE/outputs/episodes/episode-01-content.md
 
 echo ""
 if [ "$FAIL" -eq 0 ]; then
