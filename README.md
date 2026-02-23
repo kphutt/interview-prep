@@ -2,7 +2,7 @@
 
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue?logo=python&logoColor=white)](https://www.python.org)
 [![License: MIT](https://img.shields.io/badge/license-MIT-yellow.svg)](LICENSE)
-[![Tests: 307 passed](https://img.shields.io/badge/tests-307_passed-brightgreen)]()
+[![Tests: 312 passed](https://img.shields.io/badge/tests-312_passed-brightgreen)]()
 
 Preparing for a Staff+ technical interview? This tool generates a personalized study syllabus for your domain, then turns each episode into a deep-dive document you can study from, listen to as a podcast (via NotebookLM), or practice with an AI coaching bot (via Gemini Gem).
 
@@ -19,7 +19,7 @@ The pipeline produces three outputs from your domain description:
 3. **Gemini Gem coaching bot** — an interview coach with rapid-fire, mock interview, and explore modes
 
 ```
-  init          setup / syllabus       content           package
+  init          adapt / syllabus       content           package
 ┌───────┐     ┌──────────────┐     ┌────────────┐     ┌──────────┐
 │profile│────>│   agendas    │────>│  episodes   │────>│ gem.md + │
 │created│     │  generated   │     │  generated  │     │ notebook │
@@ -64,7 +64,7 @@ python3 prep.py all --profile smoketest --yes    # add --force to re-run
 ```bash
 python3 prep.py init my-domain
 # Edit profiles/my-domain/profile.md — set your role, company, and domain
-python3 prep.py setup --profile my-domain
+python3 prep.py adapt --profile my-domain --yes
 python3 prep.py all --profile my-domain
 ```
 
@@ -77,7 +77,7 @@ Outputs land in `profiles/my-domain/outputs/`. See [Using the Outputs](#using-th
 | `python: command not found` | Use `python3` — macOS doesn't ship a `python` alias |
 | `ModuleNotFoundError: openai` | `pip3 install -r requirements.txt` |
 | `ERROR: OPENAI_API_KEY not set` | Edit `.env`, then `source .env` (bash/zsh). PowerShell: `$env:OPENAI_API_KEY="sk-..."`. Fish: `set -gx OPENAI_API_KEY sk-...` |
-| `ERROR: adapted/seeds.md is empty` | Run `prep.py setup --profile <name>` or see [Manual Alternative](#manual-alternative) |
+| `ERROR: domain/seeds.md is empty` | Run `prep.py adapt --profile <name>` or see [Manual Alternative](#manual-alternative) |
 | `ERROR: --profile required` | Add `--profile <name>` to the command |
 | API auth / rate / model error | Check your API key and model access tier; try `model: gpt-4o-mini` in profile.md |
 | Cost seems high | The pipeline shows an estimate before each run. Test with `gpt-4o-mini` first |
@@ -109,26 +109,6 @@ python3 prep.py add paper.md --profile my-domain
 Note: input must be UTF-8 text (not binary PDF).
 
 **Change episode counts:** edit `core_episodes` / `frontier_episodes` in your profile.md and re-run.
-
-## Commands
-
-All API commands (`all`, `syllabus`, `content`, `add`) require `--profile`. Each command is idempotent — it skips files that already exist unless you pass `--force`.
-
-| Command | What it does |
-|---------|-------------|
-| `prep.py init <name>` | Create new profile skeleton with adapted/ stubs |
-| `prep.py setup --profile P` | Generate adapted/ files from profile.md via API |
-| `prep.py all --profile P` | Full pipeline: syllabus -> content -> package |
-| `prep.py syllabus --profile P` | Generate agendas only |
-| `prep.py content --profile P` | Generate content for existing agendas |
-| `prep.py content --profile P --episode 5` | Generate content for one episode |
-| `prep.py add doc.md --profile P [--gem-slot N]` | Distill doc -> content -> package |
-| `prep.py package [--profile P]` | Repackage outputs into Gem + NotebookLM |
-| `prep.py render prompts/gem.md [--profile P]` | Substitute vars and print to stdout |
-| `prep.py status` | List all profiles |
-| `prep.py status --profile P` | Show pipeline progress for a profile |
-
-Common flags: `--force` (regenerate existing), `--yes` (skip cost confirmation).
 
 ## Profiles
 
@@ -228,23 +208,6 @@ Domain files use `<!-- MARKER_NAME -->` HTML comment delimiters to define sectio
 | `lenses.md` | `DOMAIN_LENS`, `NITTY_GRITTY_LAYOUT`, `DOMAIN_REQUIREMENTS`, `DISTILL_REQUIREMENTS`, `STAKEHOLDERS` | content.md, distill.md |
 | `gem-sections.md` | `GEM_BOOKSHELF`, `GEM_EXAMPLES`, `GEM_CODING`, `GEM_FORMAT_EXAMPLES` | gem.md |
 
-## Prompts
-
-The `prompts/` directory includes:
-
-| Prompt | Purpose |
-|--------|---------|
-| `syllabus.md` | Syllabus generation (chunked runs: scaffold, core batches, frontiers, merge) |
-| `content.md` | Episode content generation (dense Staff-level technical documents) |
-| `distill.md` | Document distillation (whitepaper/blog -> episode agenda) |
-| `gem.md` | Gemini Gem coaching bot system prompt |
-| `notebooklm.md` | NotebookLM podcast generation prompt |
-| `notebooklm-frames.md` | Per-episode podcast frames |
-| `setup.md` | Automated domain setup (generates adapted files via API) |
-| `intake.md` | Domain intake interview (generates adapted files, $0 cost) |
-
-All prompts use `{PLACEHOLDER}` syntax. Role/company/domain vars are replaced first, then adapted domain content, then user content. This ordering prevents double-replacement when user content contains `{braces}`.
-
 ## Using the Outputs
 
 ### Output directories
@@ -278,12 +241,12 @@ The Gem acts as an interview coach with two personas, three modes, and a concept
 
 ## Manual Alternative
 
-If you'd rather not use the API for domain setup, you can generate your adapted files for free using any AI chat:
+If you'd rather not use the API for domain setup, you can generate your domain files for free using any AI chat:
 
 1. Run `python3 prep.py init my-domain` and edit `profiles/my-domain/profile.md`
 2. Paste `prompts/intake.md` into ChatGPT, Claude, or Gemini
 3. The intake is an interactive conversation — the AI will ask about your role, domain, and sub-areas, then generate all the files you need
-4. Copy each output into the matching file under `profiles/my-domain/adapted/`
+4. Copy each output into the matching file under `profiles/my-domain/domain/`
 5. Run `python3 prep.py status --profile my-domain` to confirm markers are detected
 6. Continue with `python3 prep.py all --profile my-domain`
 
@@ -309,9 +272,9 @@ When using `--profile`, values in `profile.md` take precedence over env vars.
 
 The pipeline shows a cost estimate before each run and asks for confirmation. Use `--yes` to skip the confirmation prompt. Cost depends on model, episode count, and reasoning effort.
 
-307 tests covering prompt assembly, template structure, domain file injection, preflight validation, profile management, adapt command, file helpers, skip/resume logic, packaging, manifest generation, and edge cases.
+312 tests covering prompt assembly, template structure, domain file injection, preflight validation, profile management, adapt command, file helpers, skip/resume logic, packaging, manifest generation, and edge cases.
 
-## Platform Prompts
+## Prompts
 
 The `prompts/` directory includes:
 
@@ -345,7 +308,7 @@ Calls with high reasoning effort can take several minutes each.
 python3 -m unittest test_prep -v
 ```
 
-Tests cover prompt assembly, template structure, adapted file injection, preflight validation, profile management, file helpers, skip/resume logic, packaging, manifest generation, and edge cases.
+Tests cover prompt assembly, template structure, domain file injection, preflight validation, profile management, file helpers, skip/resume logic, packaging, manifest generation, and edge cases.
 
 ## Design Docs
 

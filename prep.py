@@ -753,7 +753,7 @@ def _print_syllabus_review(profile_name):
     print(f"Review before running content generation:")
     print(f"")
     print(f"  [ ] Episode count matches expectations ({total} episodes)")
-    print(f"  [ ] Topics cover JD requirements (cross-reference with adapted/coverage.md)")
+    print(f"  [ ] Topics cover JD requirements (cross-reference with domain/coverage.md)")
     print(f"  [ ] No duplicate topics across episodes")
     print(f"  [ ] No obvious domain gaps")
     print(f"  [ ] Frontier digests cover emerging/advanced topics")
