@@ -7,7 +7,7 @@ Interview prep content pipeline. Generates a technical deep-dive syllabus (confi
 ## Key files
 
 - `prep.py` — Main pipeline script (single file, ~1400 lines)
-- `test_prep.py` — ~307 unit tests
+- `test_prep.py` — Unit tests
 - `requirements.txt` — Python dependencies (openai>=2.0.0)
 - `profiles/security-infra/` — Reference profile with generated content
 - `prompts/syllabus.md` — Syllabus generation prompt (uses `.replace()`)

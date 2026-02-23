@@ -272,7 +272,7 @@ When using `--profile`, values in `profile.md` take precedence over env vars.
 
 The pipeline shows a cost estimate before each run and asks for confirmation. Use `--yes` to skip the confirmation prompt. Cost depends on model, episode count, and reasoning effort.
 
-312 tests covering prompt assembly, template structure, domain file injection, preflight validation, profile management, adapt command, file helpers, skip/resume logic, packaging, manifest generation, and edge cases.
+Tests cover prompt assembly, template structure, domain file injection, preflight validation, profile management, adapt command, file helpers, skip/resume logic, packaging, manifest generation, and edge cases.
 
 ## Prompts
 
