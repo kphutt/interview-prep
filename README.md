@@ -2,13 +2,14 @@
 
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue?logo=python&logoColor=white)](https://www.python.org)
 [![License: MIT](https://img.shields.io/badge/license-MIT-yellow.svg)](LICENSE)
-[![Tests: 312 passed](https://img.shields.io/badge/tests-312_passed-brightgreen)]()
 
-Preparing for a Staff+ technical interview? This tool generates a personalized study syllabus for your domain, then turns each episode into a deep-dive document you can study from, listen to as a podcast (via NotebookLM), or practice with an AI coaching bot (via Gemini Gem).
+## The Problem
+
+Staff-level interview prep demands domain-specific depth that generic resources don't cover. Books and courses teach general patterns; they aren't structured around your specific role, company, and domain, and they don't guarantee coverage across topics. This pipeline generates a complete, personalized study syllabus and turns each episode into content you can study, listen to, or practice with.
+
+## Overview
 
 You describe your target role and domain; the pipeline generates Staff-level technical content tailored to your interviews. Ships with a complete Security & Infrastructure reference profile.
-
-The prompts are the crown jewels — they define episode structure, depth targets, and quality self-checks that consistently produce Staff-level technical content.
 
 ## What You Get
 
@@ -27,6 +28,14 @@ The pipeline produces three outputs from your domain description:
 ```
 
 Each stage is idempotent and resumable — commands skip files that already exist unless you pass `--force`.
+
+## Design Principles
+
+- **Idempotent** — rerun safely; existing files are skipped. Prep runs iteratively over weeks — regenerating would destroy your annotations.
+- **Marker-based injection** — domain content uses `<!-- MARKER -->` delimiters, injected into prompts via `{MARKER}` placeholders. This prevents prompt corruption when user content contains braces.
+- **Every episode has traps and pivots** — prompts require Common Trap sections (wrong answers that sound right) and Staff Pivot sections (where the conversation shifts from "correct answer" to "architectural judgment").
+- **Raw responses preserved** — every API response is saved to `outputs/raw/` for auditability.
+- **Domain-portable** — one template, any specialty. Swap the domain files and the pipeline generates equivalent depth for a different field.
 
 ## Quick Start
 
