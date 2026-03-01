@@ -159,6 +159,9 @@ _DOMAIN = {}  # marker -> content, populated by set_profile()
 # Stub comment prefix — files starting with this are considered empty stubs
 _STUB_PREFIX = "<!-- STUB:"
 
+# Domain file names — used by init, setup, preflight, and status
+_DOMAIN_FILES = ["seeds.md", "coverage.md", "lenses.md", "gem-sections.md"]
+
 def _parse_domain_sections(text):
     """Parse <!-- MARKER --> delimited sections from domain file content."""
     result = {}
@@ -211,18 +214,23 @@ def _is_stub(filepath):
     return not text or text.startswith(_STUB_PREFIX)
 
 
+def _needs_setup(profile_name):
+    """Return True if any domain file is a stub (setup not yet run)."""
+    domain_dir = BASE_DIR / "profiles" / profile_name / "domain"
+    return any(_is_stub(domain_dir / f) for f in _DOMAIN_FILES)
+
+
 def _preflight_check(profile_name, command, force=False):
     """Validate profile completeness before API calls. Errors early to avoid wasted spend."""
     profile_dir = BASE_DIR / "profiles" / profile_name
     domain_dir = profile_dir / "domain"
 
-    # setup creates domain files, doesn't need them
-    if command == "setup":
+    # setup creates domain files; all auto-runs setup if needed
+    if command in ("setup", "all"):
         return
 
     # 1. Domain files exist and are non-stub
-    domain_files = ["seeds.md", "coverage.md", "lenses.md", "gem-sections.md"]
-    for name in domain_files:
+    for name in _DOMAIN_FILES:
         f = domain_dir / name
         if _is_stub(f):
             print(f"ERROR: domain/{name} is empty or missing.")
@@ -953,9 +961,8 @@ def cmd_setup(client, profile_name, force=False):
     domain_dir.mkdir(parents=True, exist_ok=True)
 
     # Check if domain files already exist (skip unless --force)
-    domain_files = ["seeds.md", "coverage.md", "lenses.md", "gem-sections.md"]
     if not force:
-        existing = [f for f in domain_files if not _is_stub(domain_dir / f)]
+        existing = [f for f in _DOMAIN_FILES if not _is_stub(domain_dir / f)]
         if existing:
             print(f"  Domain files already exist: {', '.join(existing)}")
             print(f"  Use --force to regenerate.")
@@ -1065,9 +1072,8 @@ def _profile_summary(name):
     gem_dir = profile_dir / "outputs" / "gem"
 
     domain_dir = profile_dir / "domain"
-    domain_files = ["seeds.md", "coverage.md", "lenses.md", "gem-sections.md"]
     domain_ready = domain_dir.is_dir() and all(
-        not _is_stub(domain_dir / f) for f in domain_files
+        not _is_stub(domain_dir / f) for f in _DOMAIN_FILES
     )
 
     agendas = len(list(syllabus_dir.glob("episode-*-agenda.md"))) if syllabus_dir.exists() else 0
@@ -1099,9 +1105,8 @@ def cmd_status(profile_name=None):
         # Pipeline checklist
         profile_dir = BASE_DIR / "profiles" / profile_name
         domain_dir = profile_dir / "domain"
-        domain_files = ["seeds.md", "coverage.md", "lenses.md", "gem-sections.md"]
-        domain_count = sum(1 for f in domain_files if not _is_stub(domain_dir / f))
-        domain_total = len(domain_files)
+        domain_count = sum(1 for f in _DOMAIN_FILES if not _is_stub(domain_dir / f))
+        domain_total = len(_DOMAIN_FILES)
         agenda_count = sum(1 for ep in ALL_EPS if find_agenda(ep))
         content_count = sum(1 for ep in ALL_EPS if find_content(ep))
         gem_count = len(list(GEM_DIR.glob("gem-*.md"))) if GEM_DIR.exists() else 0
@@ -1339,10 +1344,25 @@ Next steps:
 """)
 
 
-def cmd_all(client, force=False):
+def cmd_all(client, force=False, profile_name=None):
     print("\n" + "="*60)
     print("  FULL PIPELINE")
     print("="*60 + "\n")
+
+    # Auto-run setup if domain files are stubs
+    if profile_name and _needs_setup(profile_name):
+        print("  Domain files are stubs — running setup first...\n")
+        ok = cmd_setup(client, profile_name, force=False)  # never force setup from all
+        if not ok:
+            print("\n  ERROR: Setup failed. Cannot continue pipeline.\n")
+            return
+        global _DOMAIN
+        _DOMAIN = _load_domain(profile_name)
+        if _needs_setup(profile_name):
+            print("\n  ERROR: Domain files still incomplete after setup.")
+            print("  Check outputs/raw/ for details.\n")
+            return
+        print()
 
     # Detect already-complete pipeline
     if not force:
@@ -1441,8 +1461,9 @@ def main():
     force = args.force
 
     # Cost confirmation before API calls
+    needs_setup = args.command == "all" and args.profile and _needs_setup(args.profile)
     call_counts = {
-        "all": len(SYLLABUS_RUNS) + len(ALL_EPS),
+        "all": len(SYLLABUS_RUNS) + len(ALL_EPS) + (3 if needs_setup else 0),
         "syllabus": len(SYLLABUS_RUNS),
         "content": 1 if args.episode else len(ALL_EPS),
         "add": 2,  # distill + content
@@ -1453,7 +1474,7 @@ def main():
         print("Cancelled.")
         return
 
-    if args.command == "all":      cmd_all(client, force)
+    if args.command == "all":      cmd_all(client, force, profile_name=args.profile)
     elif args.command == "syllabus":
         ok = cmd_syllabus(client, force)
         if ok:

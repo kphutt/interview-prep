@@ -3668,5 +3668,340 @@ class TestSetupCliIntegration(unittest.TestCase):
         self.assertEqual(cm.exception.code, 1)
 
 
+class TestNeedsSetup(_ProfileTestMixin, unittest.TestCase):
+    """Test _needs_setup() helper."""
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self._save_profile_state()
+        self._orig_base = prep.BASE_DIR
+        prep.BASE_DIR = Path(self.tmpdir)
+
+    def tearDown(self):
+        prep.BASE_DIR = self._orig_base
+        self._restore_profile_state()
+        shutil.rmtree(self.tmpdir)
+
+    def test_needs_setup_all_stubs(self):
+        """All stubs -> True."""
+        self._write_profile("test", "---\nrole: R\ncompany: C\ndomain: D\n---\n")
+        self._write_domain("test", {
+            "seeds.md": "<!-- STUB: placeholder -->\n",
+            "coverage.md": "<!-- STUB: placeholder -->\n",
+            "lenses.md": "<!-- STUB: placeholder -->\n",
+            "gem-sections.md": "<!-- STUB: placeholder -->\n",
+        })
+        self.assertTrue(prep._needs_setup("test"))
+
+    def test_needs_setup_no_stubs(self):
+        """Populated files -> False."""
+        self._write_profile("test", "---\nrole: R\ncompany: C\ndomain: D\n---\n")
+        self._write_domain("test", {
+            "seeds.md": "<!-- DOMAIN_SEEDS -->\nReal",
+            "coverage.md": "<!-- COVERAGE_FRAMEWORK -->\nReal",
+            "lenses.md": "<!-- DOMAIN_LENS -->\nReal",
+            "gem-sections.md": "<!-- GEM_BOOKSHELF -->\nReal",
+        })
+        self.assertFalse(prep._needs_setup("test"))
+
+    def test_needs_setup_partial_stubs(self):
+        """3 real + 1 stub -> True."""
+        self._write_profile("test", "---\nrole: R\ncompany: C\ndomain: D\n---\n")
+        self._write_domain("test", {
+            "seeds.md": "<!-- DOMAIN_SEEDS -->\nReal",
+            "coverage.md": "<!-- COVERAGE_FRAMEWORK -->\nReal",
+            "lenses.md": "<!-- DOMAIN_LENS -->\nReal",
+            "gem-sections.md": "<!-- STUB: placeholder -->\n",
+        })
+        self.assertTrue(prep._needs_setup("test"))
+
+
+class TestCmdAllAutoSetup(_ProfileTestMixin, unittest.TestCase):
+    """Test cmd_all auto-running setup when stubs detected."""
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self._save_profile_state()
+        self._orig_base = prep.BASE_DIR
+        prep.BASE_DIR = Path(self.tmpdir)
+
+    def tearDown(self):
+        prep.BASE_DIR = self._orig_base
+        self._restore_profile_state()
+        shutil.rmtree(self.tmpdir)
+
+    def _setup_stub_profile(self, name="test"):
+        """Create a profile with stub domain files and set it active."""
+        self._write_profile(name, "---\nrole: SWE\ncompany: Acme\ndomain: Testing\n---\n")
+        self._write_domain(name, {
+            "seeds.md": "<!-- STUB: placeholder -->\n",
+            "coverage.md": "<!-- STUB: placeholder -->\n",
+            "lenses.md": "<!-- STUB: placeholder -->\n",
+            "gem-sections.md": "<!-- STUB: placeholder -->\n",
+        })
+        prep.set_profile(name)
+        prep.ensure_dirs()
+
+    def _setup_populated_profile(self, name="test"):
+        """Create a profile with real domain files and set it active."""
+        self._write_profile(name, "---\nrole: SWE\ncompany: Acme\ndomain: Testing\n---\n")
+        self._write_domain(name, {
+            "seeds.md": "<!-- DOMAIN_SEEDS -->\nEpisode 1: Test",
+            "coverage.md": "<!-- COVERAGE_FRAMEWORK -->\nCoverage",
+            "lenses.md": "<!-- DOMAIN_LENS -->\nLens",
+            "gem-sections.md": "<!-- GEM_BOOKSHELF -->\nBookshelf",
+        })
+        prep.set_profile(name)
+        prep.ensure_dirs()
+
+    def _mock_setup_success(self, profile_name):
+        """Simulate cmd_setup writing real domain files."""
+        domain_dir = Path(self.tmpdir) / "profiles" / profile_name / "domain"
+        domain_dir.mkdir(parents=True, exist_ok=True)
+        (domain_dir / "seeds.md").write_text("<!-- DOMAIN_SEEDS -->\nGenerated seeds", encoding="utf-8")
+        (domain_dir / "coverage.md").write_text("<!-- COVERAGE_FRAMEWORK -->\nGenerated coverage", encoding="utf-8")
+        (domain_dir / "lenses.md").write_text("<!-- DOMAIN_LENS -->\nGenerated lens", encoding="utf-8")
+        (domain_dir / "gem-sections.md").write_text("<!-- GEM_BOOKSHELF -->\nGenerated bookshelf", encoding="utf-8")
+        return True
+
+    @patch('prep.cmd_setup')
+    def test_all_auto_runs_setup(self, mock_setup):
+        """Stubs detected -> setup called, domain reloaded, pipeline proceeds."""
+        self._setup_stub_profile("test")
+        mock_setup.side_effect = lambda *a, **kw: self._mock_setup_success("test")
+
+        # Make pipeline short-circuit as "already complete" after setup
+        for ep in prep.ALL_EPS:
+            (prep.SYLLABUS_DIR / prep.ep_file(ep, "agenda")).write_text("agenda", encoding="utf-8")
+            (prep.EPISODES_DIR / prep.ep_file(ep, "content")).write_text("x" * 500, encoding="utf-8")
+
+        client = MagicMock()
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            prep.cmd_all(client, force=False, profile_name="test")
+
+        mock_setup.assert_called_once()
+        self.assertIn("running setup first", buf.getvalue())
+
+    @patch('prep.cmd_setup')
+    def test_all_stops_if_setup_fails(self, mock_setup):
+        """Setup returns False -> no syllabus/content calls."""
+        self._setup_stub_profile("test")
+        mock_setup.return_value = False
+
+        client = MagicMock()
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            prep.cmd_all(client, force=False, profile_name="test")
+
+        self.assertIn("Setup failed", buf.getvalue())
+        client.responses.create.assert_not_called()
+
+    def test_all_skips_setup_when_populated(self):
+        """No stubs -> setup NOT called."""
+        self._setup_populated_profile("test")
+
+        # Make pipeline short-circuit as "already complete"
+        for ep in prep.ALL_EPS:
+            (prep.SYLLABUS_DIR / prep.ep_file(ep, "agenda")).write_text("agenda", encoding="utf-8")
+            (prep.EPISODES_DIR / prep.ep_file(ep, "content")).write_text("x" * 500, encoding="utf-8")
+
+        client = MagicMock()
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            prep.cmd_all(client, force=False, profile_name="test")
+
+        self.assertNotIn("running setup", buf.getvalue())
+        self.assertIn("already complete", buf.getvalue())
+
+    @patch('prep.get_client')
+    @patch('prep._confirm_cost')
+    def test_cost_includes_setup_calls(self, mock_confirm, mock_client):
+        """Cost estimate should include +3 when stubs detected."""
+        mock_confirm.return_value = False  # cancel to avoid running pipeline
+        mock_client.return_value = MagicMock()
+        self._setup_stub_profile("testcost")
+
+        with patch('sys.argv', ['prep.py', 'all', '--profile', 'testcost']):
+            prep.main()
+
+        # Cost should include setup calls (3 extra)
+        expected = len(prep.SYLLABUS_RUNS) + len(prep.ALL_EPS) + 3
+        mock_confirm.assert_called_once_with(expected, yes=False)
+
+    @patch('prep.get_client')
+    @patch('prep._confirm_cost')
+    def test_cost_excludes_setup_when_populated(self, mock_confirm, mock_client):
+        """Cost estimate should NOT include +3 when domain files exist."""
+        mock_confirm.return_value = False
+        mock_client.return_value = MagicMock()
+        self._setup_populated_profile("testcost")
+
+        with patch('sys.argv', ['prep.py', 'all', '--profile', 'testcost']):
+            prep.main()
+
+        expected = len(prep.SYLLABUS_RUNS) + len(prep.ALL_EPS)
+        mock_confirm.assert_called_once_with(expected, yes=False)
+
+    def test_preflight_allows_all_with_stubs(self):
+        """Preflight should not SystemExit for 'all' with stub domain files."""
+        self._write_profile("test", "---\nrole: R\ncompany: C\ndomain: D\n---\n")
+        self._write_domain("test", {
+            "seeds.md": "<!-- STUB: placeholder -->\n",
+            "coverage.md": "<!-- STUB: placeholder -->\n",
+            "lenses.md": "<!-- STUB: placeholder -->\n",
+            "gem-sections.md": "<!-- STUB: placeholder -->\n",
+        })
+        # Should not raise
+        prep._preflight_check("test", "all")
+
+    @patch('prep.cmd_setup')
+    def test_domain_reloaded_after_setup(self, mock_setup):
+        """_DOMAIN should have markers after auto-setup."""
+        self._setup_stub_profile("test")
+        mock_setup.side_effect = lambda *a, **kw: self._mock_setup_success("test")
+
+        # Make pipeline short-circuit as "already complete"
+        for ep in prep.ALL_EPS:
+            (prep.SYLLABUS_DIR / prep.ep_file(ep, "agenda")).write_text("agenda", encoding="utf-8")
+            (prep.EPISODES_DIR / prep.ep_file(ep, "content")).write_text("x" * 500, encoding="utf-8")
+
+        client = MagicMock()
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            prep.cmd_all(client, force=False, profile_name="test")
+
+        # After auto-setup, _DOMAIN should contain the generated markers
+        self.assertIn("DOMAIN_SEEDS", prep._DOMAIN)
+        self.assertIn("Generated seeds", prep._DOMAIN["DOMAIN_SEEDS"])
+
+
+class TestAutoSetupStability(_ProfileTestMixin, unittest.TestCase):
+    """Long-term stability tests for setup/auto-setup integration."""
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self._save_profile_state()
+        self._orig_base = prep.BASE_DIR
+        prep.BASE_DIR = Path(self.tmpdir)
+
+    def tearDown(self):
+        prep.BASE_DIR = self._orig_base
+        self._restore_profile_state()
+        shutil.rmtree(self.tmpdir)
+
+    def test_domain_files_constant_matches_init(self):
+        """Files created by cmd_init should match _DOMAIN_FILES. Catches drift."""
+        prep.cmd_init("drift-test")
+        domain_dir = Path(self.tmpdir) / "profiles" / "drift-test" / "domain"
+        actual = sorted(f.name for f in domain_dir.iterdir() if f.suffix == ".md")
+        expected = sorted(prep._DOMAIN_FILES)
+        self.assertEqual(actual, expected)
+
+    def test_init_stubs_mention_setup_command(self):
+        """Stub files should reference 'setup' not 'adapt'."""
+        prep.cmd_init("stub-test")
+        domain_dir = Path(self.tmpdir) / "profiles" / "stub-test" / "domain"
+        for fname in prep._DOMAIN_FILES:
+            text = (domain_dir / fname).read_text(encoding="utf-8")
+            self.assertIn("setup", text, f"{fname} should mention 'setup'")
+            self.assertNotIn("adapt", text, f"{fname} should not mention 'adapt'")
+
+    def test_preflight_error_mentions_setup(self):
+        """Preflight error for syllabus with stubs should say 'setup'."""
+        self._write_profile("test", "---\nrole: R\ncompany: C\ndomain: D\n---\n")
+        self._write_domain("test", {
+            "seeds.md": "<!-- STUB: placeholder -->\n",
+            "coverage.md": "<!-- STUB: placeholder -->\n",
+            "lenses.md": "<!-- STUB: placeholder -->\n",
+            "gem-sections.md": "<!-- STUB: placeholder -->\n",
+        })
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            with self.assertRaises(SystemExit):
+                prep._preflight_check("test", "syllabus")
+        self.assertIn("setup", buf.getvalue())
+        self.assertNotIn("adapt", buf.getvalue())
+
+    @patch('prep.cmd_setup')
+    def test_all_force_does_not_force_setup(self, mock_setup):
+        """cmd_all(force=True) with stubs -> verify cmd_setup called with force=False."""
+        self._write_profile("test", "---\nrole: SWE\ncompany: Acme\ndomain: Testing\n---\n")
+        self._write_domain("test", {
+            "seeds.md": "<!-- STUB: placeholder -->\n",
+            "coverage.md": "<!-- STUB: placeholder -->\n",
+            "lenses.md": "<!-- STUB: placeholder -->\n",
+            "gem-sections.md": "<!-- STUB: placeholder -->\n",
+        })
+        prep.set_profile("test")
+        prep.ensure_dirs()
+
+        # Make setup "succeed" by writing real files
+        def side_effect(*a, **kw):
+            domain_dir = Path(self.tmpdir) / "profiles" / "test" / "domain"
+            (domain_dir / "seeds.md").write_text("<!-- DOMAIN_SEEDS -->\nReal", encoding="utf-8")
+            (domain_dir / "coverage.md").write_text("<!-- COVERAGE_FRAMEWORK -->\nReal", encoding="utf-8")
+            (domain_dir / "lenses.md").write_text("<!-- DOMAIN_LENS -->\nReal", encoding="utf-8")
+            (domain_dir / "gem-sections.md").write_text("<!-- GEM_BOOKSHELF -->\nReal", encoding="utf-8")
+            return True
+        mock_setup.side_effect = side_effect
+
+        client = MagicMock()
+        client.responses.create.return_value = MagicMock(status="failed", error="test")
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            with patch('prep.time') as mock_time:
+                mock_time.sleep = MagicMock()
+                mock_time.time = MagicMock(return_value=0)
+                prep.cmd_all(client, force=True, profile_name="test")
+
+        # Verify setup was called with force=False
+        mock_setup.assert_called_once()
+        _, kwargs = mock_setup.call_args
+        self.assertFalse(kwargs.get('force', True), "setup should be called with force=False from all")
+
+    @patch('prep.cmd_setup')
+    @patch('prep.get_client')
+    @patch('prep._confirm_cost', return_value=True)
+    def test_all_integration_with_auto_setup(self, mock_confirm, mock_get_client, mock_setup):
+        """Full main() flow via sys.argv with stub domain files. Verifies wiring."""
+        self._write_profile("inttest", "---\nrole: SWE\ncompany: Acme\ndomain: Testing\ncore_episodes: 1\nfrontier_episodes: 0\n---\n")
+        self._write_domain("inttest", {
+            "seeds.md": "<!-- STUB: placeholder -->\n",
+            "coverage.md": "<!-- STUB: placeholder -->\n",
+            "lenses.md": "<!-- STUB: placeholder -->\n",
+            "gem-sections.md": "<!-- STUB: placeholder -->\n",
+        })
+
+        # Setup writes real domain files
+        def setup_side_effect(*a, **kw):
+            domain_dir = Path(self.tmpdir) / "profiles" / "inttest" / "domain"
+            (domain_dir / "seeds.md").write_text("<!-- DOMAIN_SEEDS -->\nReal", encoding="utf-8")
+            (domain_dir / "coverage.md").write_text("<!-- COVERAGE_FRAMEWORK -->\nReal", encoding="utf-8")
+            (domain_dir / "lenses.md").write_text("<!-- DOMAIN_LENS -->\nReal", encoding="utf-8")
+            (domain_dir / "gem-sections.md").write_text("<!-- GEM_BOOKSHELF -->\nReal", encoding="utf-8")
+            return True
+        mock_setup.side_effect = setup_side_effect
+
+        mock_client = MagicMock()
+        mock_resp = MagicMock(status="completed", output_text="## Episode 1: Test\nContent " * 100, usage=None)
+        mock_client.responses.create.return_value = mock_resp
+        mock_get_client.return_value = mock_client
+
+        buf = io.StringIO()
+        buf.reconfigure = MagicMock()  # StringIO lacks reconfigure
+        with patch('sys.stdout', buf):
+            with patch('sys.argv', ['prep.py', 'all', '--profile', 'inttest', '--yes']):
+                prep.main()
+
+        output = buf.getvalue()
+        # Setup should have been called
+        mock_setup.assert_called_once()
+        # Pipeline should have proceeded (syllabus + content calls)
+        self.assertTrue(mock_client.responses.create.called)
+        # Should show setup message
+        self.assertIn("running setup first", output)
+
+
 if __name__ == "__main__":
     unittest.main()
