@@ -6,7 +6,7 @@ Automates: Syllabus (8 runs) -> Content (per episode) -> Package (Gem + Notebook
 
 Usage:
     python prep.py init <profile-name>                    # Create new profile skeleton
-    python prep.py adapt  --profile P                     # Generate domain files (3 API calls)
+    python prep.py setup  --profile P                     # Generate domain files (3 API calls)
     python prep.py all    --profile P                     # Full pipeline
     python prep.py syllabus --profile P                   # Generate agendas only
     python prep.py content --profile P [--episode N]      # Generate content
@@ -19,7 +19,7 @@ Setup:
     pip install -r requirements.txt
     cp .env.example .env   # edit .env with your API key
     set -a && source .env && set +a
-    python prep.py adapt --profile <name>
+    python prep.py setup --profile <name>
 """
 
 import argparse
@@ -216,8 +216,8 @@ def _preflight_check(profile_name, command, force=False):
     profile_dir = BASE_DIR / "profiles" / profile_name
     domain_dir = profile_dir / "domain"
 
-    # adapt creates domain files, doesn't need them
-    if command == "adapt":
+    # setup creates domain files, doesn't need them
+    if command == "setup":
         return
 
     # 1. Domain files exist and are non-stub
@@ -226,7 +226,7 @@ def _preflight_check(profile_name, command, force=False):
         f = domain_dir / name
         if _is_stub(f):
             print(f"ERROR: domain/{name} is empty or missing.")
-            print(f"  Run 'python prep.py adapt --profile {profile_name}' or see prompts/intake.md")
+            print(f"  Run 'python prep.py setup --profile {profile_name}' or see prompts/intake.md")
             sys.exit(1)
 
     # 2. Prompt files exist
@@ -896,10 +896,10 @@ def cmd_add(client, filepath, slot=None):
 
 
 # ---------------------------------------------------------------------------
-# ADAPT COMMAND (generate domain files via API)
+# SETUP COMMAND (generate domain files via API)
 # ---------------------------------------------------------------------------
-def _adapt_instructions():
-    """System instructions for adapt calls (domain file generation)."""
+def _setup_instructions():
+    """System instructions for setup calls (domain file generation)."""
     return f"You are a {ROLE} at {COMPANY} acting as an expert interview coach. Generate the requested domain-specific content sections exactly as specified. Output ONLY the sections with their marker comments — no preamble, no explanations."
 
 
@@ -932,7 +932,7 @@ def _write_domain_file(domain_dir, filename, markers, parsed):
     return True
 
 
-def _build_adapt_prompt(prompt_name, profile_text, **extra):
+def _build_setup_prompt(prompt_name, profile_text, **extra):
     """Load a meta-prompt and replace role/domain/profile placeholders."""
     t = load_prompt(prompt_name)
     t = t.replace("{ROLE}", ROLE)
@@ -945,9 +945,9 @@ def _build_adapt_prompt(prompt_name, profile_text, **extra):
     return t
 
 
-def cmd_adapt(client, profile_name, force=False):
+def cmd_setup(client, profile_name, force=False):
     """Generate domain files via 3 API calls."""
-    print(f"\n=== ADAPT: {profile_name} (3 calls) ===\n")
+    print(f"\n=== SETUP: {profile_name} (3 calls) ===\n")
     profile_dir = BASE_DIR / "profiles" / profile_name
     domain_dir = profile_dir / "domain"
     domain_dir.mkdir(parents=True, exist_ok=True)
@@ -967,9 +967,9 @@ def cmd_adapt(client, profile_name, force=False):
 
     # Call 1: meta-seeds -> seeds.md + coverage.md
     print("  1/3: Generating seeds + coverage framework...")
-    prompt1 = _build_adapt_prompt("meta-seeds", profile_text,
+    prompt1 = _build_setup_prompt("meta-seeds", profile_text,
                                    CONTEXT_DOCS=context_docs)
-    resp1 = call_llm(client, _adapt_instructions(), prompt1, label="Seeds + Coverage")
+    resp1 = call_llm(client, _setup_instructions(), prompt1, label="Seeds + Coverage")
     if not resp1:
         print("  FAILED: call 1 (seeds + coverage)")
         return False
@@ -981,8 +981,8 @@ def cmd_adapt(client, profile_name, force=False):
 
     # Call 2: meta-lenses -> lenses.md
     print("  2/3: Generating lenses...")
-    prompt2 = _build_adapt_prompt("meta-lenses", profile_text)
-    resp2 = call_llm(client, _adapt_instructions(), prompt2, label="Lenses")
+    prompt2 = _build_setup_prompt("meta-lenses", profile_text)
+    resp2 = call_llm(client, _setup_instructions(), prompt2, label="Lenses")
     if not resp2:
         print("  FAILED: call 2 (lenses)")
         return False
@@ -996,9 +996,9 @@ def cmd_adapt(client, profile_name, force=False):
     # Call 3: meta-gem -> gem-sections.md (includes seeds from call 1)
     print("  3/3: Generating gem sections...")
     seeds_content = parsed1.get("DOMAIN_SEEDS", "")
-    prompt3 = _build_adapt_prompt("meta-gem", profile_text,
+    prompt3 = _build_setup_prompt("meta-gem", profile_text,
                                    SEEDS_CONTENT=seeds_content)
-    resp3 = call_llm(client, _adapt_instructions(), prompt3, label="Gem Sections")
+    resp3 = call_llm(client, _setup_instructions(), prompt3, label="Gem Sections")
     if not resp3:
         print("  FAILED: call 3 (gem sections)")
         return False
@@ -1009,7 +1009,7 @@ def cmd_adapt(client, profile_name, force=False):
                        ["GEM_BOOKSHELF", "GEM_EXAMPLES", "GEM_CODING",
                         "GEM_FORMAT_EXAMPLES"], parsed3)
 
-    print(f"\n=== ADAPT COMPLETE ===")
+    print(f"\n=== SETUP COMPLETE ===")
     print(f"  Domain files written to {domain_dir}/")
     print(f"  Next: python prep.py syllabus --profile {profile_name}")
     print()
@@ -1116,7 +1116,7 @@ def cmd_status(profile_name=None):
 
         # Next command
         if domain_count < domain_total:
-            print(f"\n  Next: python prep.py adapt --profile {profile_name}")
+            print(f"\n  Next: python prep.py setup --profile {profile_name}")
         elif agenda_count < total:
             print(f"\n  Next: python prep.py syllabus --profile {profile_name}")
         elif content_count < total:
@@ -1289,7 +1289,7 @@ def cmd_init(name):
             "<!-- Replace this file with your domain's episode seeds.\n"
             "     Use <!-- DOMAIN_SEEDS --> as the section header.\n"
             "     See profiles/security-infra/domain/seeds.md for an example.\n"
-            "     Generate via: python prep.py adapt --profile {name}\n"
+            "     Generate via: python prep.py setup --profile {name}\n"
             "     Or manually using prompts/intake.md in any AI chat. -->\n"
         ),
         "coverage.md": (
@@ -1297,7 +1297,7 @@ def cmd_init(name):
             "<!-- Replace this file with your domain's coverage framework.\n"
             "     Use <!-- COVERAGE_FRAMEWORK --> as the section header.\n"
             "     See profiles/security-infra/domain/coverage.md for an example.\n"
-            "     Generate via: python prep.py adapt --profile {name}\n"
+            "     Generate via: python prep.py setup --profile {name}\n"
             "     Or manually using prompts/intake.md in any AI chat. -->\n"
         ),
         "lenses.md": (
@@ -1306,7 +1306,7 @@ def cmd_init(name):
             "     Required sections: <!-- DOMAIN_LENS -->, <!-- NITTY_GRITTY_LAYOUT -->,\n"
             "     <!-- DOMAIN_REQUIREMENTS -->, <!-- DISTILL_REQUIREMENTS -->, <!-- STAKEHOLDERS -->\n"
             "     See profiles/security-infra/domain/lenses.md for an example.\n"
-            "     Generate via: python prep.py adapt --profile {name}\n"
+            "     Generate via: python prep.py setup --profile {name}\n"
             "     Or manually using prompts/intake.md in any AI chat. -->\n"
         ),
         "gem-sections.md": (
@@ -1315,7 +1315,7 @@ def cmd_init(name):
             "     Required sections: <!-- GEM_BOOKSHELF -->, <!-- GEM_EXAMPLES -->,\n"
             "     <!-- GEM_CODING -->, <!-- GEM_FORMAT_EXAMPLES -->\n"
             "     See profiles/security-infra/domain/gem-sections.md for an example.\n"
-            "     Generate via: python prep.py adapt --profile {name}\n"
+            "     Generate via: python prep.py setup --profile {name}\n"
             "     Or manually using prompts/intake.md in any AI chat. -->\n"
         ),
     }
@@ -1330,7 +1330,7 @@ Next steps:
      Fill in role, company, domain, and other fields.
 
   2. Generate domain-specific content:
-       Option A (automated): python prep.py adapt --profile {name}
+       Option A (automated): python prep.py setup --profile {name}
        Option B (manual):    Paste prompts/intake.md into any AI chat,
                              save files into {profile_dir / 'domain'}/
 
@@ -1373,7 +1373,7 @@ def cmd_all(client, force=False):
 def main():
     sys.stdout.reconfigure(encoding="utf-8")
     p = argparse.ArgumentParser(description="Interview Prep Pipeline")
-    p.add_argument("command", choices=["all","syllabus","content","add","adapt","package","status","render","init"])
+    p.add_argument("command", choices=["all","syllabus","content","add","setup","package","status","render","init"])
     p.add_argument("file", nargs="?", help="File path for 'add'/'render', or profile name for 'init'")
     p.add_argument("--profile", type=str, default=None,
                    help="Profile name (uses profiles/{name}/ for config and data)")
@@ -1397,7 +1397,7 @@ def main():
         return
 
     # API commands require --profile
-    _API_COMMANDS = {"all", "syllabus", "content", "add", "adapt"}
+    _API_COMMANDS = {"all", "syllabus", "content", "add", "setup"}
     if args.command in _API_COMMANDS and not args.profile:
         print(f"ERROR: --profile required for '{args.command}'.")
         print(f"  Run 'python prep.py init <name>' to create a profile.")
@@ -1418,7 +1418,7 @@ def main():
         p.error(f"--episode must be one of {ALL_EPS[0]}-{ALL_EPS[-1]}")
 
     # Only create dirs for write commands
-    if args.command in ("all", "syllabus", "content", "add", "adapt", "package"):
+    if args.command in ("all", "syllabus", "content", "add", "setup", "package"):
         ensure_dirs()
 
     if args.command == "status":   cmd_status(profile_name=args.profile); return
@@ -1446,7 +1446,7 @@ def main():
         "syllabus": len(SYLLABUS_RUNS),
         "content": 1 if args.episode else len(ALL_EPS),
         "add": 2,  # distill + content
-        "adapt": 3,  # seeds+coverage, lenses, gem
+        "setup": 3,  # seeds+coverage, lenses, gem
     }
     num_calls = call_counts.get(args.command, 0)
     if num_calls and not _confirm_cost(num_calls, yes=args.yes):
@@ -1459,7 +1459,7 @@ def main():
         if ok:
             _print_syllabus_review(args.profile)
     elif args.command == "content":  cmd_content(client, force, episode=args.episode)
-    elif args.command == "adapt":    cmd_adapt(client, args.profile, force)
+    elif args.command == "setup":    cmd_setup(client, args.profile, force)
     elif args.command == "add":
         if not args.file:
             print("Usage: python prep.py add <file> [--gem-slot N]")

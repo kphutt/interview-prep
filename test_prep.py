@@ -2560,7 +2560,7 @@ class TestEnhancedStatus(_ProfileTestMixin, unittest.TestCase):
         self.assertIn("3/15 agendas", output)
 
     def test_next_command_printed(self):
-        """Pipeline should suggest next command (adapt when domain files missing)."""
+        """Pipeline should suggest next command (setup when domain files missing)."""
         self._write_profile("myprep", "---\nrole: SWE\ncompany: Acme\ndomain: D\n---\n")
         prep.set_profile("myprep")
         prep.ensure_dirs()
@@ -2571,7 +2571,7 @@ class TestEnhancedStatus(_ProfileTestMixin, unittest.TestCase):
             prep.cmd_status(profile_name="myprep")
         output = f.getvalue()
         self.assertIn("Next:", output)
-        self.assertIn("adapt", output)
+        self.assertIn("setup", output)
 
     def test_pipeline_complete(self):
         """All stages done should show 'Pipeline complete!'."""
@@ -3376,8 +3376,8 @@ class TestRenderWithProfileInjects(_ProfileTestMixin, unittest.TestCase):
         self.assertIn("test lens value", result)
 
 
-class TestCmdAdapt(_ProfileTestMixin, unittest.TestCase):
-    """Test cmd_adapt domain file generation."""
+class TestCmdSetup(_ProfileTestMixin, unittest.TestCase):
+    """Test cmd_setup domain file generation."""
 
     def setUp(self):
         self.tmpdir = tempfile.mkdtemp()
@@ -3430,21 +3430,21 @@ class TestCmdAdapt(_ProfileTestMixin, unittest.TestCase):
             "<!-- GEM_FORMAT_EXAMPLES -->\n2026-02|Interview|Testing|Unit|Owned|Good|Locked\n"
         )
 
-    def test_adapt_creates_all_domain_files(self):
+    def test_setup_creates_all_domain_files(self):
         """All 4 domain files should be created with correct markers."""
         client = self._mock_client([
             self._seeds_response(),
             self._lenses_response(),
             self._gem_response(),
         ])
-        result = prep.cmd_adapt(client, "test", force=True)
+        result = prep.cmd_setup(client, "test", force=True)
         self.assertTrue(result)
         domain_dir = Path(self.tmpdir) / "profiles" / "test" / "domain"
         for fname in ["seeds.md", "coverage.md", "lenses.md", "gem-sections.md"]:
             self.assertTrue((domain_dir / fname).exists(), f"{fname} should exist")
             self.assertFalse(prep._is_stub(domain_dir / fname), f"{fname} should not be stub")
 
-    def test_adapt_skips_when_files_exist(self):
+    def test_setup_skips_when_files_exist(self):
         """No API calls when non-stub domain files already present."""
         self._write_domain("test", {
             "seeds.md": "<!-- DOMAIN_SEEDS -->\nExisting",
@@ -3453,11 +3453,11 @@ class TestCmdAdapt(_ProfileTestMixin, unittest.TestCase):
             "gem-sections.md": "<!-- GEM_BOOKSHELF -->\nExisting",
         })
         client = MagicMock()
-        result = prep.cmd_adapt(client, "test", force=False)
+        result = prep.cmd_setup(client, "test", force=False)
         self.assertTrue(result)
         client.responses.create.assert_not_called()
 
-    def test_adapt_force_regenerates(self):
+    def test_setup_force_regenerates(self):
         """--force should overwrite existing domain files."""
         self._write_domain("test", {
             "seeds.md": "<!-- DOMAIN_SEEDS -->\nOld content",
@@ -3470,14 +3470,14 @@ class TestCmdAdapt(_ProfileTestMixin, unittest.TestCase):
             self._lenses_response(),
             self._gem_response(),
         ])
-        result = prep.cmd_adapt(client, "test", force=True)
+        result = prep.cmd_setup(client, "test", force=True)
         self.assertTrue(result)
         domain_dir = Path(self.tmpdir) / "profiles" / "test" / "domain"
         text = (domain_dir / "seeds.md").read_text(encoding="utf-8")
         self.assertIn("Test Topic", text)
         self.assertNotIn("Old content", text)
 
-    def test_adapt_reads_context_docs(self):
+    def test_setup_reads_context_docs(self):
         """Context docs from inputs/misc/ should appear in call 1 prompt."""
         misc_dir = Path(self.tmpdir) / "profiles" / "test" / "inputs" / "misc"
         misc_dir.mkdir(parents=True, exist_ok=True)
@@ -3488,56 +3488,56 @@ class TestCmdAdapt(_ProfileTestMixin, unittest.TestCase):
             self._lenses_response(),
             self._gem_response(),
         ])
-        prep.cmd_adapt(client, "test", force=True)
+        prep.cmd_setup(client, "test", force=True)
 
         # The first API call should include context docs
         call_args = client.responses.create.call_args_list[0]
         input_text = call_args.kwargs.get("input", "")
         self.assertIn("Special notes about testing", input_text)
 
-    def test_adapt_call3_receives_seeds(self):
+    def test_setup_call3_receives_seeds(self):
         """Call 3 (gem) prompt should contain seeds from call 1."""
         client = self._mock_client([
             self._seeds_response(),
             self._lenses_response(),
             self._gem_response(),
         ])
-        prep.cmd_adapt(client, "test", force=True)
+        prep.cmd_setup(client, "test", force=True)
 
         # Third call should have seeds content
         call_args = client.responses.create.call_args_list[2]
         input_text = call_args.kwargs.get("input", "")
         self.assertIn("Test Topic", input_text)
 
-    def test_adapt_saves_raw_outputs(self):
+    def test_setup_saves_raw_outputs(self):
         """Raw API responses should be saved."""
         client = self._mock_client([
             self._seeds_response(),
             self._lenses_response(),
             self._gem_response(),
         ])
-        prep.cmd_adapt(client, "test", force=True)
+        prep.cmd_setup(client, "test", force=True)
         raw_dir = Path(self.tmpdir) / "profiles" / "test" / "outputs" / "raw"
         self.assertTrue((raw_dir / "adapt-1-seeds.md").exists())
         self.assertTrue((raw_dir / "adapt-2-lenses.md").exists())
         self.assertTrue((raw_dir / "adapt-3-gem.md").exists())
 
-    def test_adapt_handles_api_failure(self):
+    def test_setup_handles_api_failure(self):
         """Should return False on first call failure."""
         resp = MagicMock(status="failed", output_text=None, error="test error")
         client = MagicMock()
         client.responses.create.return_value = resp
-        result = prep.cmd_adapt(client, "test", force=True)
+        result = prep.cmd_setup(client, "test", force=True)
         self.assertFalse(result)
 
-    def test_adapt_partial_failure(self):
+    def test_setup_partial_failure(self):
         """Call 1 ok, call 2 fails: seeds+coverage should still be written."""
         resp1 = MagicMock(status="completed", output_text=self._seeds_response(), usage=None)
         resp2 = MagicMock(status="failed", output_text=None, error="test error")
         client = MagicMock()
         client.responses.create.side_effect = [resp1, resp2]
 
-        result = prep.cmd_adapt(client, "test", force=True)
+        result = prep.cmd_setup(client, "test", force=True)
         self.assertFalse(result)
         domain_dir = Path(self.tmpdir) / "profiles" / "test" / "domain"
         # Seeds and coverage from call 1 should exist
@@ -3545,7 +3545,7 @@ class TestCmdAdapt(_ProfileTestMixin, unittest.TestCase):
         self.assertTrue((domain_dir / "coverage.md").exists())
 
 
-class TestAdaptPromptTemplates(unittest.TestCase):
+class TestSetupPromptTemplates(unittest.TestCase):
     """Test that meta-prompt templates render without unreplaced placeholders."""
 
     def test_meta_seeds_prompt_renders(self):
@@ -3578,8 +3578,8 @@ class TestAdaptPromptTemplates(unittest.TestCase):
             self.assertNotIn(p, rendered)
 
 
-class TestPreflightSkipsAdapt(_ProfileTestMixin, unittest.TestCase):
-    """Preflight should skip validation for adapt command."""
+class TestPreflightSkipsSetup(_ProfileTestMixin, unittest.TestCase):
+    """Preflight should skip validation for setup command."""
 
     def setUp(self):
         self.tmpdir = tempfile.mkdtemp()
@@ -3592,11 +3592,11 @@ class TestPreflightSkipsAdapt(_ProfileTestMixin, unittest.TestCase):
         self._restore_profile_state()
         shutil.rmtree(self.tmpdir)
 
-    def test_preflight_skips_for_adapt(self):
-        """Preflight should not error for adapt command even without domain files."""
+    def test_preflight_skips_for_setup(self):
+        """Preflight should not error for setup command even without domain files."""
         self._write_profile("test", "---\nrole: R\ncompany: C\ndomain: D\n---\n")
         # Should not raise even though domain files don't exist
-        prep._preflight_check("test", "adapt")
+        prep._preflight_check("test", "setup")
 
 
 class TestStatusShowsDomainFiles(_ProfileTestMixin, unittest.TestCase):
@@ -3649,21 +3649,21 @@ class TestStatusShowsDomainFiles(_ProfileTestMixin, unittest.TestCase):
         self.assertIn("syllabus", output)  # next command should be syllabus
 
 
-class TestAdaptCliIntegration(unittest.TestCase):
-    """Test adapt command CLI integration."""
+class TestSetupCliIntegration(unittest.TestCase):
+    """Test setup command CLI integration."""
 
-    def test_adapt_in_argparse_choices(self):
-        """adapt should be a valid command choice."""
+    def test_setup_in_argparse_choices(self):
+        """setup should be a valid command choice."""
         import argparse
         p = argparse.ArgumentParser()
-        p.add_argument("command", choices=["all","syllabus","content","add","adapt","package","status","render","init"])
-        args = p.parse_args(["adapt"])
-        self.assertEqual(args.command, "adapt")
+        p.add_argument("command", choices=["all","syllabus","content","add","setup","package","status","render","init"])
+        args = p.parse_args(["setup"])
+        self.assertEqual(args.command, "setup")
 
-    def test_adapt_requires_profile(self):
-        """adapt should require --profile."""
+    def test_setup_requires_profile(self):
+        """setup should require --profile."""
         with self.assertRaises(SystemExit) as cm:
-            with patch('sys.argv', ['prep.py', 'adapt']):
+            with patch('sys.argv', ['prep.py', 'setup']):
                 prep.main()
         self.assertEqual(cm.exception.code, 1)
 
