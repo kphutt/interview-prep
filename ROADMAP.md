@@ -8,9 +8,9 @@ Prioritized by what helps new users get started and get value fastest.
 
 The `init` template body says "Add any extra context here" — doesn't mention job descriptions or explain that the body directly feeds `setup` and significantly improves output quality. Two changes: (1) rename the template section to "Job Description & Context" with a clear prompt to paste the JD, (2) update `cmd_init` output to explicitly tell users to paste the JD and why it matters.
 
-### `all` auto-runs setup
+### ~~`all` auto-runs setup~~ ✅
 
-If adapted files are stubs when `all` runs, it should run `setup` automatically instead of erroring via `_preflight_check`. Collapses the new user flow from `init` → edit profile → `setup` → `all` down to `init` → edit profile → `all`. One less command to know about.
+Implemented: `all` detects stub domain files and auto-runs `setup` before proceeding. See `docs/design/onboarding/` for future phases.
 
 ### `prep.py clean --profile P`
 

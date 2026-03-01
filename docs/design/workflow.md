@@ -2,7 +2,7 @@
 
 Current-state snapshot of the full journey from clone to podcast. Captures every step, mixing automated pipeline commands with manual platform actions.
 
-For details on env vars, troubleshooting, adapted file markers, and API config, see the [README](../../README.md).
+For details on env vars, troubleshooting, domain file markers, and API config, see the [README](../../README.md).
 
 ---
 
@@ -32,14 +32,14 @@ set -a && source .env && set +a
 | **Cost** | $0 |
 | **Command** | `python3 prep.py init <name>` |
 | **Prerequisites** | Step 1 |
-| **Produces** | `profiles/<name>/` with template `profile.md` and stub files in `adapted/` |
+| **Produces** | `profiles/<name>/` with template `profile.md` and stub files in `domain/` |
 
 Creates the directory skeleton:
 
 ```
 profiles/<name>/
   profile.md            <- Config template (role, company, domain, model, episode counts)
-  adapted/
+  domain/
     seeds.md            <- Stub
     coverage.md         <- Stub
     lenses.md           <- Stub
@@ -76,9 +76,9 @@ as_of: "Feb 2026"
 ---
 ```
 
-**Alternative (free):** Paste `prompts/intake.md` into any AI chat (ChatGPT, Claude, Gemini). The intake is an interactive conversation — the AI asks about your role and domain, then generates the profile config and all adapted files. Copy results into the appropriate files.
+**Alternative (free):** Paste `prompts/intake.md` into any AI chat (ChatGPT, Claude, Gemini). The intake is an interactive conversation — the AI asks about your role and domain, then generates the profile config and all domain files. Copy results into the appropriate files.
 
-### 4. Generate adapted content
+### 4. Generate domain content
 
 | | |
 |---|---|
@@ -86,7 +86,7 @@ as_of: "Feb 2026"
 | **Cost** | ~$2 (with gpt-5.2-pro) |
 | **Command** | `python3 prep.py setup --profile <name>` |
 | **Prerequisites** | Step 3 (filled-in `profile.md`) |
-| **Produces** | 4 files in `profiles/<name>/adapted/` |
+| **Produces** | 4 files in `profiles/<name>/domain/` |
 
 The setup command reads `profile.md` and generates domain-specific content:
 
@@ -97,7 +97,7 @@ The setup command reads `profile.md` and generates domain-specific content:
 | `lenses.md` | Domain lens, Nitty Gritty layout, requirements, stakeholders |
 | `gem-sections.md` | Gem coaching bot: bookshelf, examples, coding challenges, format |
 
-These adapted files get injected into the shared prompt templates via marker substitution. Each file uses `<!-- MARKER_NAME -->` HTML comment delimiters.
+These domain files get injected into the shared prompt templates via marker substitution. Each file uses `<!-- MARKER_NAME -->` HTML comment delimiters.
 
 **Alternative (free):** If you used the intake interview in Step 3, you already have these files — skip this step.
 
@@ -111,7 +111,7 @@ These adapted files get injected into the shared prompt templates via marker sub
 | **Prerequisites** | Steps 3–4 |
 | **Produces** | Pipeline status report (no files) |
 
-Confirms adapted files are loaded and markers are detected. Fix any issues before spending on API calls. Run `status` without `--profile` to list all profiles.
+Confirms domain files are loaded and markers are detected. Fix any issues before spending on API calls. Run `status` without `--profile` to list all profiles.
 
 ### 6. Generate syllabus
 
@@ -255,7 +255,9 @@ Which prompts are consumed by the pipeline vs used manually:
 | `prompts/syllabus.md` | `prep.py syllabus` / `prep.py all` | Pipeline-consumed |
 | `prompts/content.md` | `prep.py content` / `prep.py all` | Pipeline-consumed |
 | `prompts/distill.md` | `prep.py add` | Pipeline-consumed |
-| `prompts/setup.md` | `prep.py setup` | Pipeline-consumed |
+| `prompts/meta-seeds.md` | `prep.py setup` (call 1) | Pipeline-consumed |
+| `prompts/meta-lenses.md` | `prep.py setup` (call 2) | Pipeline-consumed |
+| `prompts/meta-gem.md` | `prep.py setup` (call 3) | Pipeline-consumed |
 | `prompts/intake.md` | Paste into any AI chat | Manual (free alternative to `setup`) |
 | `prompts/gem.md` | `prep.py render` → paste into Gemini | Manual |
 | `prompts/notebooklm.md` | Copy → paste into NotebookLM | Manual |
@@ -270,7 +272,7 @@ Final state after a full pipeline run with 12 core + 3 frontier episodes:
 ```
 profiles/<name>/
   profile.md
-  adapted/
+  domain/
     seeds.md
     coverage.md
     lenses.md
@@ -321,7 +323,7 @@ Estimates for a 15-episode profile (12 core + 3 frontier) with `gpt-5.2-pro`:
 |------|------|
 | Install + configure | $0 |
 | `init` | $0 |
-| `setup` (adapted files) | ~$2 |
+| `setup` (domain files) | ~$2 |
 | `status` | $0 |
 | `syllabus` | ~$5–10 |
 | `content` (15 episodes) | ~$15–30 |
@@ -331,7 +333,7 @@ Estimates for a 15-episode profile (12 core + 3 frontier) with `gpt-5.2-pro`:
 | **Total** | **~$22–42** |
 
 Tips:
-- Test with `gpt-4o-mini` first (much cheaper) to validate adapted content and agenda quality
+- Test with `gpt-4o-mini` first (much cheaper) to validate domain content and agenda quality
 - The `smoketest` profile ships with 2 episodes + gpt-4o-mini for pennies-level validation
 - The pipeline shows a cost estimate and asks for confirmation before each API run
 - Use `--yes` to skip the confirmation prompt

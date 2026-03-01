@@ -7,7 +7,7 @@
     {DATE_1}, {DATE_2} — your interview dates
 
   The Bookshelf and example questions are injected from your profile's
-  adapted/gem-sections.md. Run render with --profile to fill them in.
+  domain/gem-sections.md. Run render with --profile to fill them in.
 -->
 
 # {PREP_COMPANY} {PREP_ROLE} Coach — Gem Instructions

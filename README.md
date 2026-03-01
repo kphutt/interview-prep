@@ -20,7 +20,7 @@ The pipeline produces three outputs from your domain description:
 3. **Gemini Gem coaching bot** — an interview coach with rapid-fire, mock interview, and explore modes
 
 ```
-  init          adapt / syllabus       content           package
+  init            setup / syllabus       content           package
 ┌───────┐     ┌──────────────┐     ┌────────────┐     ┌──────────┐
 │profile│────>│   agendas    │────>│  episodes   │────>│ gem.md + │
 │created│     │  generated   │     │  generated  │     │ notebook │
@@ -55,8 +55,7 @@ set -a && source .env && set +a
 # Create a profile for your domain
 python prep.py init my-domain
 
-# Generate domain content (see "Adapting to a New Domain" below)
-# Then generate everything:
+# Generate everything (`all` auto-runs setup if domain files haven't been generated):
 python prep.py all --profile my-domain
 ```
 
@@ -73,8 +72,7 @@ python3 prep.py all --profile smoketest --yes    # add --force to re-run
 ```bash
 python3 prep.py init my-domain
 # Edit profiles/my-domain/profile.md — set your role, company, and domain
-python3 prep.py adapt --profile my-domain --yes
-python3 prep.py all --profile my-domain
+python3 prep.py all --profile my-domain    # auto-runs setup, then syllabus + content + package
 ```
 
 Outputs land in `profiles/my-domain/outputs/`. See [Using the Outputs](#using-the-outputs) for NotebookLM and Gem setup.
@@ -86,7 +84,7 @@ Outputs land in `profiles/my-domain/outputs/`. See [Using the Outputs](#using-th
 | `python: command not found` | Use `python3` — macOS doesn't ship a `python` alias |
 | `ModuleNotFoundError: openai` | `pip3 install -r requirements.txt` |
 | `ERROR: OPENAI_API_KEY not set` | Edit `.env`, then `source .env` (bash/zsh). PowerShell: `$env:OPENAI_API_KEY="sk-..."`. Fish: `set -gx OPENAI_API_KEY sk-...` |
-| `ERROR: domain/seeds.md is empty` | Run `prep.py adapt --profile <name>` or see [Manual Alternative](#manual-alternative) |
+| `ERROR: domain/seeds.md is empty` | Run `prep.py setup --profile <name>` or see [Manual Alternative](#manual-alternative) |
 | `ERROR: --profile required` | Add `--profile <name>` to the command |
 | API auth / rate / model error | Check your API key and model access tier; try `model: gpt-4o-mini` in profile.md |
 | Cost seems high | The pipeline shows an estimate before each run. Test with `gpt-4o-mini` first |
@@ -147,13 +145,13 @@ The reference profile `profiles/security-infra/` ships with complete domain file
 
 ## Commands
 
-All API commands (`all`, `syllabus`, `content`, `add`, `adapt`) require `--profile`.
+All API commands (`all`, `syllabus`, `content`, `add`, `setup`) require `--profile`.
 
 | Command | What it does |
 |---------|-------------|
 | `prep.py init <name>` | Create new profile skeleton with domain/ stubs |
-| `prep.py adapt --profile P` | Generate domain files (3 API calls, ~$5-10) |
-| `prep.py all --profile P` | Full pipeline: syllabus -> content -> package |
+| `prep.py setup --profile P` | Generate domain files (3 API calls, ~$5-10) |
+| `prep.py all --profile P` | Full pipeline: auto-runs setup if needed, then syllabus -> content -> package |
 | `prep.py syllabus --profile P` | Generate agendas only (8 API calls) |
 | `prep.py content --profile P` | Generate content for existing agendas |
 | `prep.py content --profile P --episode 5` | Generate content for one episode |
@@ -180,7 +178,7 @@ This creates `profiles/data-eng/` with a template `profile.md` and 4 stub files 
 **Option A: Automated** (~$5-10, 3 API calls)
 ```bash
 # Edit profiles/data-eng/profile.md first (fill in role, company, domain)
-python prep.py adapt --profile data-eng --yes
+python prep.py setup --profile data-eng --yes
 ```
 
 **Option B: Manual** ($0)
@@ -281,7 +279,7 @@ When using `--profile`, values in `profile.md` take precedence over env vars.
 
 The pipeline shows a cost estimate before each run and asks for confirmation. Use `--yes` to skip the confirmation prompt. Cost depends on model, episode count, and reasoning effort.
 
-Tests cover prompt assembly, template structure, domain file injection, preflight validation, profile management, adapt command, file helpers, skip/resume logic, packaging, manifest generation, and edge cases.
+Tests cover prompt assembly, template structure, domain file injection, preflight validation, profile management, setup command, file helpers, skip/resume logic, packaging, manifest generation, and edge cases.
 
 ## Prompts
 
@@ -296,9 +294,9 @@ The `prompts/` directory includes:
 | `notebooklm.md` | NotebookLM podcast generation prompt |
 | `notebooklm-frames.md` | Per-episode podcast frames |
 | `intake.md` | Domain intake interview (generates domain files, $0 cost) |
-| `meta-seeds.md` | Seeds + coverage generation (used by `adapt` command) |
-| `meta-lenses.md` | Domain lenses generation (used by `adapt` command) |
-| `meta-gem.md` | Gem sections generation (used by `adapt` command) |
+| `meta-seeds.md` | Seeds + coverage generation (used by `setup` command) |
+| `meta-lenses.md` | Domain lenses generation (used by `setup` command) |
+| `meta-gem.md` | Gem sections generation (used by `setup` command) |
 
 All prompts use `{PLACEHOLDER}` syntax. Role/company/domain vars are replaced first, then domain content, then user content. This ordering prevents double-replacement when user content contains `{braces}`.
 
@@ -322,6 +320,6 @@ Tests cover prompt assembly, template structure, domain file injection, prefligh
 ## Design Docs
 
 Design documents live in `docs/design/`. Convention:
-- `backlog.md` — Ideas not yet tied to an initiative
-- `{initiative}/brainstorm.md` — Exploration, specs, open questions
-- `{initiative}/decisions.md` — Settled choices (append-only)
+- `{initiative}/brainstorm.md` — Required exploration scratchpad (open questions, analysis, edge cases)
+- `{initiative}/backlog.md` — Optional phased plan for larger work
+- `docs/decisions/NNNN-short-title.md` — Settled choices (one per file, append-only, centralized)
