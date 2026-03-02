@@ -163,7 +163,7 @@ All API commands (`all`, `syllabus`, `content`, `add`, `setup`) require `--profi
 
 Common flags: `--force` (regenerate existing), `--yes` (skip cost confirmation).
 
-## Adapting to a New Domain
+## Setting Up a New Domain
 
 ### 1. Create a profile
 

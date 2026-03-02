@@ -83,7 +83,7 @@ as_of: "Feb 2026"
 | | |
 |---|---|
 | **Type** | CLI |
-| **Cost** | ~$2 (with gpt-5.2-pro) |
+| **Cost** | ~$5-10 (with gpt-5.2-pro) |
 | **Command** | `python3 prep.py setup --profile <name>` |
 | **Prerequisites** | Step 3 (filled-in `profile.md`) |
 | **Produces** | 4 files in `profiles/<name>/domain/` |
@@ -167,7 +167,7 @@ Packaging creates two output formats from the episode content:
 
 **Gem** (`outputs/gem/`): Core episodes merged in pairs (ep 1–2 → `gem-1.md`, ep 3–4 → `gem-2.md`, etc.) to fit Gem token limits. All frontier episodes share one slot (ep 13–15 → `gem-7.md`), and one additional slot is reserved for misc content. Also copies `scaffold.md` and `final_merge.md` as `gem-0-scaffold.md` and `gem-0-final_merge.md`.
 
-Note: `prep.py all` runs syllabus → content → package automatically.
+Note: `prep.py all` runs setup (if domain files are stubs) → syllabus → content → package automatically.
 
 ### 9. Set up Gem
 
@@ -323,14 +323,14 @@ Estimates for a 15-episode profile (12 core + 3 frontier) with `gpt-5.2-pro`:
 |------|------|
 | Install + configure | $0 |
 | `init` | $0 |
-| `setup` (domain files) | ~$2 |
+| `setup` (domain files) | ~$5–10 |
 | `status` | $0 |
 | `syllabus` | ~$5–10 |
 | `content` (15 episodes) | ~$15–30 |
 | `package` | $0 |
 | Gem setup | $0 |
 | NotebookLM setup | $0 |
-| **Total** | **~$22–42** |
+| **Total** | **~$25–50** |
 
 Tips:
 - Test with `gpt-4o-mini` first (much cheaper) to validate domain content and agenda quality

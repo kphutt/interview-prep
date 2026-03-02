@@ -3797,7 +3797,8 @@ class TestCmdAllAutoSetup(_ProfileTestMixin, unittest.TestCase):
         self.assertIn("Setup failed", buf.getvalue())
         client.responses.create.assert_not_called()
 
-    def test_all_skips_setup_when_populated(self):
+    @patch('prep.cmd_setup')
+    def test_all_skips_setup_when_populated(self, mock_setup):
         """No stubs -> setup NOT called."""
         self._setup_populated_profile("test")
 
@@ -3811,7 +3812,7 @@ class TestCmdAllAutoSetup(_ProfileTestMixin, unittest.TestCase):
         with contextlib.redirect_stdout(buf):
             prep.cmd_all(client, force=False, profile_name="test")
 
-        self.assertNotIn("running setup", buf.getvalue())
+        mock_setup.assert_not_called()
         self.assertIn("already complete", buf.getvalue())
 
     @patch('prep.get_client')
@@ -3956,9 +3957,7 @@ class TestAutoSetupStability(_ProfileTestMixin, unittest.TestCase):
                 prep.cmd_all(client, force=True, profile_name="test")
 
         # Verify setup was called with force=False
-        mock_setup.assert_called_once()
-        _, kwargs = mock_setup.call_args
-        self.assertFalse(kwargs.get('force', True), "setup should be called with force=False from all")
+        mock_setup.assert_called_once_with(unittest.mock.ANY, "test", force=False)
 
     @patch('prep.cmd_setup')
     @patch('prep.get_client')
@@ -3997,8 +3996,11 @@ class TestAutoSetupStability(_ProfileTestMixin, unittest.TestCase):
         output = buf.getvalue()
         # Setup should have been called
         mock_setup.assert_called_once()
-        # Pipeline should have proceeded (syllabus + content calls)
-        self.assertTrue(mock_client.responses.create.called)
+        # Pipeline should have proceeded through syllabus + content
+        # With 1 core + 0 frontier, expect SYLLABUS_RUNS calls + 1 content call
+        expected_min_calls = len(prep.build_syllabus_runs(1, 0)) + 1
+        self.assertGreaterEqual(mock_client.responses.create.call_count, expected_min_calls,
+            f"Pipeline should have made at least {expected_min_calls} API calls (syllabus + content)")
         # Should show setup message
         self.assertIn("running setup first", output)
 

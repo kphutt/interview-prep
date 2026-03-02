@@ -46,7 +46,7 @@ python prep.py setup --profile P          # Generate domain files (3 API calls, 
 python prep.py all    --profile P        # Full pipeline (auto-runs setup if needed)
 python prep.py syllabus --profile P      # Generate agendas only
 python prep.py content --profile P [--episode N]  # Generate content
-python prep.py add <file> --gem-slot N    # Distill doc -> content -> package
+python prep.py add <file> --profile P     # Distill doc -> content -> package
 python prep.py package [--profile P]      # Repackage outputs
 python prep.py render <file> [--profile P] # Substitute env vars, print to stdout
 python prep.py status  [--profile P]      # Show what exists (pipeline view with --profile)

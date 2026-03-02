@@ -1360,6 +1360,7 @@ def cmd_all(client, force=False, profile_name=None):
         _DOMAIN = _load_domain(profile_name)
         if _needs_setup(profile_name):
             print("\n  ERROR: Domain files still incomplete after setup.")
+            print(f"  Run 'python prep.py setup --profile {profile_name} --force' to retry.")
             print("  Check outputs/raw/ for details.\n")
             return
         print()

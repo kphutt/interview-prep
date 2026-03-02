@@ -14,7 +14,7 @@ Implemented: `all` detects stub domain files and auto-runs `setup` before procee
 
 ### `prep.py clean --profile P`
 
-No way to reset generated outputs without `rm -rf profiles/P/outputs/`, which risks deleting adapted files by accident. A `clean` command that only removes generated outputs (syllabus, episodes, gem, notebooklm, raw) would be safer.
+No way to reset generated outputs without `rm -rf profiles/P/outputs/`, which risks deleting domain files by accident. A `clean` command that only removes generated outputs (syllabus, episodes, gem, notebooklm, raw) would be safer.
 
 ### Progress during API calls
 
@@ -26,7 +26,7 @@ There's a cost confirmation before runs but no summary after. Printing "This run
 
 ### `status` surfaces validate issues
 
-`status --profile P` and `validate` are separate commands. If `status` also flagged config issues (missing API key, stub adapted files) inline, users wouldn't need to discover `validate` exists.
+`status --profile P` doesn't flag config issues (missing API key, stub domain files). If it did, users could catch problems before spending on API calls.
 
 ### Expanded use cases
 
@@ -82,7 +82,7 @@ Incorporate interviewer info (LinkedIn profiles, published articles) to tailor c
 - ~~Model-agnostic API calls~~ ✅ — `_MODEL_CAPS`, `_clamp_effort()`, `BadRequestError` safety net.
 - ~~Defensive validation hardening~~ ✅ — Blank field errors, missing syllabus hints, profile name validation, binary file guard.
 - ~~Friction and manual-step audit~~ ✅ — [Audit doc](docs/design/friction-audit.md): 19 friction points, E2E smoke test.
-- ~~`prep.py validate` command~~ ✅ — Checks API key, profile fields, adapted markers, prompt files.
+- ~~`prep.py validate` command~~ ✅ — Folded into `status`: checks API key, profile fields, domain markers, prompt files.
 - ~~Smoketest `--force` in README~~ ✅ — Auto-detects complete pipeline, suggests `--force`.
 - ~~Partial failure exit codes~~ ✅ — `cmd_content` tracks and reports failures.
 - ~~Remove `prep-backup.py`~~ ✅ — Already gitignored, not tracked.
