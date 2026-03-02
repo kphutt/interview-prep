@@ -424,6 +424,7 @@ def _model_capabilities(model):
 POLL_TIMEOUT = int(os.environ.get("POLL_TIMEOUT", "1800"))  # 30 min default
 
 def get_client():
+    """Create and return an OpenAI client, validating API key is set."""
     try:
         from openai import OpenAI
     except ImportError:
@@ -511,6 +512,7 @@ def call_llm(client, instructions, user_input, label="", retries=3):
 # PROMPTS
 # ---------------------------------------------------------------------------
 def load_prompt(name):
+    """Load a prompt template from prompts/{name}.md."""
     p = PROMPTS / f"{name}.md"
     if not p.exists():
         print(f"ERROR: {p} not found")
@@ -518,6 +520,7 @@ def load_prompt(name):
     return p.read_text(encoding="utf-8")
 
 def syllabus_prompt(run):
+    """Build the syllabus prompt for a given run, replacing all placeholders."""
     t = load_prompt("syllabus")
     # Run-specific vars
     t = t.replace("{MODE}", run["mode"])
@@ -540,6 +543,7 @@ def syllabus_prompt(run):
     return t
 
 def content_prompt(agenda, notes=""):
+    """Build the content prompt for an episode agenda."""
     t = load_prompt("content")
     # Use replace() instead of format() because agenda text may contain {braces}
     # Replace role vars BEFORE agenda injection to avoid replacing literals in user content
@@ -553,6 +557,7 @@ def content_prompt(agenda, notes=""):
     return t
 
 def distill_prompt(raw):
+    """Build the distill prompt for a raw document."""
     t = load_prompt("distill")
     # Use replace() because raw doc may contain {braces}
     # Replace role vars BEFORE raw doc injection to avoid replacing literals in user content
@@ -619,52 +624,49 @@ def parse_agendas(text):
 # FILE HELPERS
 # ---------------------------------------------------------------------------
 def ensure_dirs():
+    """Create all output and input directories if they don't exist."""
     for d in [SYLLABUS_DIR, EPISODES_DIR, GEM_DIR, NLM_DIR, RAW_DIR,
               IN_AGENDAS, IN_EPISODES, IN_MISC]:
         d.mkdir(parents=True, exist_ok=True)
 
 def ep_file(ep, kind):
+    """Return the filename for an episode, e.g. 'episode-01-agenda.md'."""
     return f"episode-{ep:02d}-{kind}.md"
 
 def find_agenda(ep):
+    """Find the agenda file for an episode, checking inputs/ then outputs/."""
     for d in [IN_AGENDAS, SYLLABUS_DIR]:
         p = d / ep_file(ep, "agenda")
         if p.exists(): return p
     return None
 
 def find_content(ep):
+    """Find the content file for an episode, checking inputs/ then outputs/."""
     for d in [IN_EPISODES, EPISODES_DIR]:
         p = d / ep_file(ep, "content")
         if p.exists(): return p
     return None
 
+def _recover_from_pattern(pattern):
+    """Recover agendas from raw files matching pattern. Returns count recovered."""
+    count = 0
+    for raw_file in sorted(RAW_DIR.glob(f"syllabus-*-{pattern}*.md")):
+        text = raw_file.read_text(encoding="utf-8")
+        if not text.strip():
+            continue
+        parsed = parse_agendas(text)
+        for ep, txt in parsed.items():
+            p = SYLLABUS_DIR / ep_file(ep, "agenda")
+            if not p.exists() and not (IN_AGENDAS / ep_file(ep, "agenda")).exists():
+                p.write_text(txt, encoding="utf-8")
+                print(f"  recovered {p.name} from {raw_file.name}")
+                count += 1
+    return count
+
+
 def recover_agendas_from_raw():
     """If raw syllabus files exist but agenda files don't, re-parse them."""
-    recovered = 0
-    for raw_file in sorted(RAW_DIR.glob("syllabus-*-core_batch*.md")):
-        text = raw_file.read_text(encoding="utf-8")
-        if not text.strip():
-            continue
-        parsed = parse_agendas(text)
-        for ep, txt in parsed.items():
-            p = SYLLABUS_DIR / ep_file(ep, "agenda")
-            if not p.exists() and not (IN_AGENDAS / ep_file(ep, "agenda")).exists():
-                p.write_text(txt, encoding="utf-8")
-                print(f"  recovered {p.name} from {raw_file.name}")
-                recovered += 1
-
-    for raw_file in sorted(RAW_DIR.glob("syllabus-*-frontier_digest*.md")):
-        text = raw_file.read_text(encoding="utf-8")
-        if not text.strip():
-            continue
-        parsed = parse_agendas(text)
-        for ep, txt in parsed.items():
-            p = SYLLABUS_DIR / ep_file(ep, "agenda")
-            if not p.exists() and not (IN_AGENDAS / ep_file(ep, "agenda")).exists():
-                p.write_text(txt, encoding="utf-8")
-                print(f"  recovered {p.name} from {raw_file.name}")
-                recovered += 1
-
+    recovered = _recover_from_pattern("core_batch") + _recover_from_pattern("frontier_digest")
     if recovered:
         print(f"  recovered {recovered} agendas from raw files\n")
     return recovered
@@ -674,6 +676,7 @@ def recover_agendas_from_raw():
 # COMMANDS
 # ---------------------------------------------------------------------------
 def cmd_syllabus(client, force=False):
+    """Run the multi-pass syllabus generation pipeline. Returns True on success."""
     print(f"\n=== SYLLABUS ({len(SYLLABUS_RUNS)} runs) ===\n")
     if force: print("  (--force: regenerating all)\n")
     recover_agendas_from_raw()
@@ -771,6 +774,7 @@ def _print_syllabus_review(profile_name):
     print(f"To regenerate: python3 prep.py syllabus --profile {profile_name} --force")
 
 def cmd_content(client, force=False, episode=None):
+    """Generate content for each episode from its agenda. Returns True if no failures."""
     print("\n=== CONTENT GENERATION ===\n")
     if force: print("  (--force: regenerating all)\n")
     recover_agendas_from_raw()
@@ -814,6 +818,7 @@ def cmd_content(client, force=False, episode=None):
     return fail == 0
 
 def cmd_package():
+    """Package episode content into Gem merged files and NotebookLM individual files."""
     print("\n=== PACKAGING ===\n")
 
     content = {}
@@ -864,6 +869,7 @@ def cmd_package():
     return True
 
 def cmd_add(client, filepath, slot=None):
+    """Distill an external document into an episode and append to a gem slot."""
     slot = slot or _total_gem_slots()
     print(f"\n=== ADD: {filepath} -> gem-{slot} ===\n")
     src = Path(filepath)
@@ -1095,6 +1101,7 @@ def _profile_summary(name):
 
 
 def cmd_status(profile_name=None):
+    """Show pipeline status: profile summary or detailed progress with --profile."""
     print("\n=== STATUS ===\n")
 
     if profile_name:
@@ -1345,6 +1352,7 @@ Next steps:
 
 
 def cmd_all(client, force=False, profile_name=None):
+    """Run the full pipeline: setup (if needed) -> syllabus -> content -> package."""
     print("\n" + "="*60)
     print("  FULL PIPELINE")
     print("="*60 + "\n")
@@ -1392,6 +1400,7 @@ def cmd_all(client, force=False, profile_name=None):
 # MAIN
 # ---------------------------------------------------------------------------
 def main():
+    """CLI entry point: parse args, load profile, dispatch command."""
     sys.stdout.reconfigure(encoding="utf-8")
     p = argparse.ArgumentParser(description="Interview Prep Pipeline")
     p.add_argument("command", choices=["all","syllabus","content","add","setup","package","status","render","init"])
