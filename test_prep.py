@@ -3518,9 +3518,9 @@ class TestCmdSetup(_ProfileTestMixin, unittest.TestCase):
         ])
         prep.cmd_setup(client, "test", force=True)
         raw_dir = Path(self.tmpdir) / "profiles" / "test" / "outputs" / "raw"
-        self.assertTrue((raw_dir / "adapt-1-seeds.md").exists())
-        self.assertTrue((raw_dir / "adapt-2-lenses.md").exists())
-        self.assertTrue((raw_dir / "adapt-3-gem.md").exists())
+        self.assertTrue((raw_dir / "setup-1-seeds.md").exists())
+        self.assertTrue((raw_dir / "setup-2-lenses.md").exists())
+        self.assertTrue((raw_dir / "setup-3-gem.md").exists())
 
     def test_setup_handles_api_failure(self):
         """Should return False on first call failure."""
@@ -3681,6 +3681,12 @@ class TestNeedsSetup(_ProfileTestMixin, unittest.TestCase):
         prep.BASE_DIR = self._orig_base
         self._restore_profile_state()
         shutil.rmtree(self.tmpdir)
+
+    def test_needs_setup_no_domain_dir(self):
+        """Missing domain directory -> True (all files treated as stubs)."""
+        self._write_profile("test", "---\nrole: R\ncompany: C\ndomain: D\n---\n")
+        # No _write_domain call — domain dir does not exist
+        self.assertTrue(prep._needs_setup("test"))
 
     def test_needs_setup_all_stubs(self):
         """All stubs -> True."""
@@ -3961,8 +3967,7 @@ class TestAutoSetupStability(_ProfileTestMixin, unittest.TestCase):
 
     @patch('prep.cmd_setup')
     @patch('prep.get_client')
-    @patch('prep._confirm_cost', return_value=True)
-    def test_all_integration_with_auto_setup(self, mock_confirm, mock_get_client, mock_setup):
+    def test_all_integration_with_auto_setup(self, mock_get_client, mock_setup):
         """Full main() flow via sys.argv with stub domain files. Verifies wiring."""
         self._write_profile("inttest", "---\nrole: SWE\ncompany: Acme\ndomain: Testing\ncore_episodes: 1\nfrontier_episodes: 0\n---\n")
         self._write_domain("inttest", {

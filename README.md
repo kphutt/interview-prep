@@ -41,7 +41,9 @@ Each stage is idempotent and resumable — commands skip files that already exis
 
 ### Browse the reference profile (free, no API key)
 
-A complete Security & Infrastructure profile ships with the repo:
+A complete Security & Infrastructure profile ships with the repo — browse `profiles/security-infra/outputs/` to see what the pipeline generates.
+
+### Build your own profile
 
 ```bash
 pip install -r requirements.txt

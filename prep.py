@@ -220,7 +220,7 @@ def _needs_setup(profile_name):
     return any(_is_stub(domain_dir / f) for f in _DOMAIN_FILES)
 
 
-def _preflight_check(profile_name, command, force=False):
+def _preflight_check(profile_name, command):
     """Validate profile completeness before API calls. Errors early to avoid wasted spend."""
     profile_dir = BASE_DIR / "profiles" / profile_name
     domain_dir = profile_dir / "domain"
@@ -980,7 +980,7 @@ def cmd_setup(client, profile_name, force=False):
     if not resp1:
         print("  FAILED: call 1 (seeds + coverage)")
         return False
-    (RAW_DIR / f"adapt-1-seeds.md").write_text(resp1, encoding="utf-8")
+    (RAW_DIR / f"setup-1-seeds.md").write_text(resp1, encoding="utf-8")
 
     parsed1 = _parse_domain_sections(resp1)
     _write_domain_file(domain_dir, "seeds.md", ["DOMAIN_SEEDS"], parsed1)
@@ -993,7 +993,7 @@ def cmd_setup(client, profile_name, force=False):
     if not resp2:
         print("  FAILED: call 2 (lenses)")
         return False
-    (RAW_DIR / f"adapt-2-lenses.md").write_text(resp2, encoding="utf-8")
+    (RAW_DIR / f"setup-2-lenses.md").write_text(resp2, encoding="utf-8")
 
     parsed2 = _parse_domain_sections(resp2)
     _write_domain_file(domain_dir, "lenses.md",
@@ -1009,7 +1009,7 @@ def cmd_setup(client, profile_name, force=False):
     if not resp3:
         print("  FAILED: call 3 (gem sections)")
         return False
-    (RAW_DIR / f"adapt-3-gem.md").write_text(resp3, encoding="utf-8")
+    (RAW_DIR / f"setup-3-gem.md").write_text(resp3, encoding="utf-8")
 
     parsed3 = _parse_domain_sections(resp3)
     _write_domain_file(domain_dir, "gem-sections.md",
@@ -1456,7 +1456,7 @@ def main():
         return
 
     # Pre-flight validation before API calls (runs before get_client / cost confirmation)
-    _preflight_check(args.profile, args.command, args.force)
+    _preflight_check(args.profile, args.command)
 
     client = get_client()
     force = args.force

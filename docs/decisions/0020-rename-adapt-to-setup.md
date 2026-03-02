@@ -8,14 +8,13 @@ Decision 0014 originally named the domain generation command "setup". It was lat
 
 ## Decision
 
-1. Rename `adapt` → `setup` in all user-facing strings, functions, tests, and documentation.
+1. Rename `adapt` → `setup` in all user-facing strings, functions, tests, documentation, and raw output filenames.
 2. The `all` command auto-runs `setup` when domain files are stubs, collapsing the new user flow to `init` → edit profile → `all`.
-3. Raw output filenames (`adapt-1-seeds.md`, `adapt-2-lenses.md`, `adapt-3-gem.md`) are preserved for backwards compatibility with existing profiles.
-4. `--force` on `all` does NOT force-regenerate domain files (setup is $5-10, a separate concern).
-5. Only `all` gets auto-setup; `syllabus`/`content` keep existing preflight error behavior.
+3. `--force` on `all` does NOT force-regenerate domain files (setup is $5-10, a separate concern).
+4. Only `all` gets auto-setup; `syllabus`/`content` keep existing preflight error behavior.
 
 ## Consequences
 
 - New users don't need to know `setup` exists as a separate command.
 - Existing users see no regression — `all` skips setup when domain files exist.
-- The word "adapt" no longer appears in any user-facing output (only in raw filenames and historical decision docs).
+- The word "adapt" no longer appears in any user-facing output or code (only in historical decision docs).
