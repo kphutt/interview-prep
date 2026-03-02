@@ -337,3 +337,35 @@ Tips:
 - The `smoketest` profile ships with 2 episodes + gpt-4o-mini for pennies-level validation
 - The pipeline shows a cost estimate and asks for confirmation before each API run
 - Use `--yes` to skip the confirmation prompt
+
+---
+
+## Reference Profile (`security-infra`)
+
+The `profiles/security-infra/` directory is a complete worked example committed to git. Its outputs cost ~$52 to generate and serve as both documentation and a quick-start for browsing.
+
+### Why outputs are committed
+
+Pipeline outputs are normally gitignored. The reference profile is the exception — its outputs are tracked so new users can browse real output without spending money. The `.gitignore` has an explicit carve-out: `!profiles/security-infra/outputs/`.
+
+### File provenance
+
+Not all files in the reference profile are pipeline-generated. Three files were **manually created** and cannot be reproduced by running the pipeline:
+
+| File | What it is | Reproducible? | Cost to recreate |
+|------|-----------|---------------|-----------------|
+| `outputs/gem/gem-0.md` | Hand-written study guide with learning strategies, drill patterns, and cross-episode study plan | No — manually authored | ~$50 of effort (study + writing time) |
+| `outputs/gem/gaps-brief.md` | Gap analysis covering topics the syllabus missed (IAL3, DDoS/Anycast, behavioral biometrics) | No — manually authored | Significant research + writing |
+| `outputs/notebooklm/gaps-brief.md` | Copy of above for NotebookLM upload | No — copy of manual file | — |
+
+**All other files** in `outputs/` are pipeline-generated and can be reproduced by running `python prep.py all --profile security-infra --force` (~$52, requires OpenAI API key).
+
+### For new profiles
+
+When creating a new profile, the manually-created files above are **not generated** by the pipeline. They represent optional enrichment you can add after the pipeline runs:
+
+- **Study guide** (`gem-0.md`): Write learning strategies specific to your domain after reviewing the generated episodes
+- **Gaps brief**: Identify topics the syllabus missed and write supplementary content
+- **Upload both** to your Gem alongside the pipeline-generated `gem-1` through `gem-7` files
+
+The `prompts/gem.md` system prompt references these files ("gem-0", "Gaps Brief") — they are expected by the Gem coaching bot but the bot will function without them.

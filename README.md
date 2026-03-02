@@ -281,7 +281,7 @@ The `prompts/` directory includes:
 
 | Prompt | Purpose |
 |--------|---------|
-| `syllabus.md` | Syllabus generation (8 chunked runs: scaffold, core batches, frontiers, merge) |
+| `syllabus.md` | Syllabus generation (scaffold, core batches, frontier digests, merge — count scales with episode count) |
 | `content.md` | Episode content generation (dense Staff-level technical documents) |
 | `distill.md` | Document distillation (whitepaper/blog -> episode agenda) |
 | `gem.md` | Gemini Gem coaching bot system prompt |
