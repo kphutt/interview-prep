@@ -18,6 +18,47 @@ os.environ.setdefault("OPENAI_API_KEY", "sk-test-fake-key")
 import prep
 
 
+class _ProfileTestMixin:
+    """Mixin that saves/restores all 13 dir constants + 7 config vars + episode counts."""
+
+    _PROFILE_DIR_ATTRS = [
+        'OUTPUTS', 'SYLLABUS_DIR', 'EPISODES_DIR', 'GEM_DIR', 'NLM_DIR',
+        'RAW_DIR', 'IN_AGENDAS', 'IN_EPISODES', 'IN_MISC',
+    ]
+    _PROFILE_CFG_ATTRS = [
+        'ROLE', 'COMPANY', 'DOMAIN', 'AUDIENCE', 'MODEL', 'EFFORT', 'AS_OF',
+    ]
+    _PROFILE_COUNT_ATTRS = [
+        '_CORE_COUNT', '_FRONTIER_COUNT', 'CORE_EPS', 'FRONTIER_EPS',
+        'ALL_EPS', 'SYLLABUS_RUNS',
+    ]
+
+    def _save_profile_state(self):
+        self._profile_saved = {}
+        for attr in self._PROFILE_DIR_ATTRS + self._PROFILE_CFG_ATTRS + self._PROFILE_COUNT_ATTRS:
+            self._profile_saved[attr] = getattr(prep, attr)
+        self._saved_domain = prep._DOMAIN.copy()
+
+    def _restore_profile_state(self):
+        for attr, val in self._profile_saved.items():
+            setattr(prep, attr, val)
+        prep._DOMAIN = self._saved_domain
+
+    def _write_profile(self, name, content, base=None):
+        base = base or self.tmpdir
+        d = Path(base) / "profiles" / name
+        d.mkdir(parents=True, exist_ok=True)
+        (d / "profile.md").write_text(content, encoding="utf-8")
+
+    def _write_domain(self, name, domain_files, base=None):
+        """Write domain/ files for a profile. domain_files: dict of fname->content."""
+        base = base or self.tmpdir
+        d = Path(base) / "profiles" / name / "domain"
+        d.mkdir(parents=True, exist_ok=True)
+        for fname, content in domain_files.items():
+            (d / fname).write_text(content, encoding="utf-8")
+
+
 class TestGemSlot(unittest.TestCase):
     def test_core_episodes_pair_into_slots_1_through_6(self):
         self.assertEqual(prep.gem_slot(1), 1)
@@ -204,13 +245,10 @@ class TestPromptTemplating(unittest.TestCase):
         self.assertIn("{EXTRA_NOTES}", result)
 
 
-class TestFileHelpers(unittest.TestCase):
+class TestFileHelpers(_ProfileTestMixin, unittest.TestCase):
     def setUp(self):
         self.tmpdir = tempfile.mkdtemp()
-        self._orig_in_agendas = prep.IN_AGENDAS
-        self._orig_in_episodes = prep.IN_EPISODES
-        self._orig_syllabus_dir = prep.SYLLABUS_DIR
-        self._orig_episodes_dir = prep.EPISODES_DIR
+        self._save_profile_state()
 
         prep.IN_AGENDAS = Path(self.tmpdir) / "in_agendas"
         prep.IN_EPISODES = Path(self.tmpdir) / "in_episodes"
@@ -221,11 +259,8 @@ class TestFileHelpers(unittest.TestCase):
             d.mkdir(parents=True)
 
     def tearDown(self):
+        self._restore_profile_state()
         shutil.rmtree(self.tmpdir)
-        prep.IN_AGENDAS = self._orig_in_agendas
-        prep.IN_EPISODES = self._orig_in_episodes
-        prep.SYLLABUS_DIR = self._orig_syllabus_dir
-        prep.EPISODES_DIR = self._orig_episodes_dir
 
     def test_find_agenda_in_inputs(self):
         p = prep.IN_AGENDAS / "episode-01-agenda.md"
@@ -272,23 +307,21 @@ class TestFileHelpers(unittest.TestCase):
         self.assertEqual(result.read_text(encoding="utf-8"), "")
 
 
-class TestSkipLogic(unittest.TestCase):
+class TestSkipLogic(_ProfileTestMixin, unittest.TestCase):
     """Test that cmd_syllabus and cmd_content correctly skip existing files."""
 
     def setUp(self):
         self.tmpdir = tempfile.mkdtemp()
-        self._orig = {}
+        self._save_profile_state()
         for attr in ['IN_AGENDAS', 'IN_EPISODES', 'SYLLABUS_DIR', 'EPISODES_DIR',
                       'RAW_DIR', 'GEM_DIR', 'NLM_DIR']:
-            self._orig[attr] = getattr(prep, attr)
             new_dir = Path(self.tmpdir) / attr.lower()
             new_dir.mkdir(parents=True)
             setattr(prep, attr, new_dir)
 
     def tearDown(self):
+        self._restore_profile_state()
         shutil.rmtree(self.tmpdir)
-        for attr, val in self._orig.items():
-            setattr(prep, attr, val)
 
     def test_content_skips_existing(self):
         """If content exists, cmd_content should not call LLM for that episode."""
@@ -480,21 +513,19 @@ class TestSkipLogic(unittest.TestCase):
         self.assertIn("0 failed", buf.getvalue())
 
 
-class TestPackaging(unittest.TestCase):
+class TestPackaging(_ProfileTestMixin, unittest.TestCase):
     def setUp(self):
         self.tmpdir = tempfile.mkdtemp()
-        self._orig = {}
+        self._save_profile_state()
         for attr in ['IN_AGENDAS', 'IN_EPISODES', 'SYLLABUS_DIR', 'EPISODES_DIR',
                       'RAW_DIR', 'GEM_DIR', 'NLM_DIR']:
-            self._orig[attr] = getattr(prep, attr)
             new_dir = Path(self.tmpdir) / attr.lower()
             new_dir.mkdir(parents=True)
             setattr(prep, attr, new_dir)
 
     def tearDown(self):
+        self._restore_profile_state()
         shutil.rmtree(self.tmpdir)
-        for attr, val in self._orig.items():
-            setattr(prep, attr, val)
 
     def test_package_creates_gem_files(self):
         # Create content for eps 1 and 2 (should go to gem-1)
@@ -683,23 +714,21 @@ class TestCallLLM(unittest.TestCase):
         self.assertIsNone(result)
 
 
-class TestParseAgendasWarning(unittest.TestCase):
+class TestParseAgendasWarning(_ProfileTestMixin, unittest.TestCase):
     """Test that empty parse results trigger warnings during syllabus."""
 
     def setUp(self):
         self.tmpdir = tempfile.mkdtemp()
-        self._orig = {}
+        self._save_profile_state()
         for attr in ['IN_AGENDAS', 'IN_EPISODES', 'SYLLABUS_DIR', 'EPISODES_DIR',
                       'RAW_DIR', 'GEM_DIR', 'NLM_DIR']:
-            self._orig[attr] = getattr(prep, attr)
             new_dir = Path(self.tmpdir) / attr.lower()
             new_dir.mkdir(parents=True)
             setattr(prep, attr, new_dir)
 
     def tearDown(self):
+        self._restore_profile_state()
         shutil.rmtree(self.tmpdir)
-        for attr, val in self._orig.items():
-            setattr(prep, attr, val)
 
     def test_warning_printed_on_empty_parse(self):
         """If model output has no parseable episodes, a warning should print."""
@@ -755,23 +784,21 @@ class TestParseAgendasWarning(unittest.TestCase):
         self.assertIn("saved episode-01-agenda.md", output)
 
 
-class TestCmdAllFailureHandling(unittest.TestCase):
+class TestCmdAllFailureHandling(_ProfileTestMixin, unittest.TestCase):
     """Test that cmd_all warns on syllabus failure."""
 
     def setUp(self):
         self.tmpdir = tempfile.mkdtemp()
-        self._orig = {}
+        self._save_profile_state()
         for attr in ['IN_AGENDAS', 'IN_EPISODES', 'SYLLABUS_DIR', 'EPISODES_DIR',
                       'RAW_DIR', 'GEM_DIR', 'NLM_DIR']:
-            self._orig[attr] = getattr(prep, attr)
             new_dir = Path(self.tmpdir) / attr.lower()
             new_dir.mkdir(parents=True)
             setattr(prep, attr, new_dir)
 
     def tearDown(self):
+        self._restore_profile_state()
         shutil.rmtree(self.tmpdir)
-        for attr, val in self._orig.items():
-            setattr(prep, attr, val)
 
     def test_warns_on_syllabus_failure(self):
         """If syllabus fails, cmd_all should print warning but continue."""
@@ -800,23 +827,21 @@ class TestCmdAllFailureHandling(unittest.TestCase):
         self.assertIn("WARNING: Syllabus had failures", output)
 
 
-class TestCmdAllAlreadyComplete(unittest.TestCase):
+class TestCmdAllAlreadyComplete(_ProfileTestMixin, unittest.TestCase):
     """Test that cmd_all short-circuits when pipeline is already complete."""
 
     def setUp(self):
         self.tmpdir = tempfile.mkdtemp()
-        self._orig = {}
+        self._save_profile_state()
         for attr in ['IN_AGENDAS', 'IN_EPISODES', 'SYLLABUS_DIR', 'EPISODES_DIR',
                       'RAW_DIR', 'GEM_DIR', 'NLM_DIR']:
-            self._orig[attr] = getattr(prep, attr)
             new_dir = Path(self.tmpdir) / attr.lower()
             new_dir.mkdir(parents=True)
             setattr(prep, attr, new_dir)
 
     def tearDown(self):
+        self._restore_profile_state()
         shutil.rmtree(self.tmpdir)
-        for attr, val in self._orig.items():
-            setattr(prep, attr, val)
 
     def test_skips_when_complete(self):
         """cmd_all should print message and return without API calls when all outputs exist."""
@@ -854,23 +879,21 @@ class TestCmdAllAlreadyComplete(unittest.TestCase):
         self.assertNotIn("already complete", output)
 
 
-class TestRecoverFromRaw(unittest.TestCase):
+class TestRecoverFromRaw(_ProfileTestMixin, unittest.TestCase):
     """Test recovery of agendas from raw syllabus files."""
 
     def setUp(self):
         self.tmpdir = tempfile.mkdtemp()
-        self._orig = {}
+        self._save_profile_state()
         for attr in ['IN_AGENDAS', 'IN_EPISODES', 'SYLLABUS_DIR', 'EPISODES_DIR',
                       'RAW_DIR', 'GEM_DIR', 'NLM_DIR']:
-            self._orig[attr] = getattr(prep, attr)
             new_dir = Path(self.tmpdir) / attr.lower()
             new_dir.mkdir(parents=True)
             setattr(prep, attr, new_dir)
 
     def tearDown(self):
+        self._restore_profile_state()
         shutil.rmtree(self.tmpdir)
-        for attr, val in self._orig.items():
-            setattr(prep, attr, val)
 
     def test_recovers_agendas_from_raw_core_batch(self):
         """If raw file exists but agendas don't, recover them."""
@@ -2225,47 +2248,6 @@ class TestCountHelpers(unittest.TestCase):
     def test_frontier_range_str_single(self):
         prep._reconfigure(4, 1)
         self.assertEqual(prep._frontier_range_str(), "5")
-
-
-class _ProfileTestMixin:
-    """Mixin that saves/restores all 13 dir constants + 7 config vars + episode counts."""
-
-    _PROFILE_DIR_ATTRS = [
-        'OUTPUTS', 'SYLLABUS_DIR', 'EPISODES_DIR', 'GEM_DIR', 'NLM_DIR',
-        'RAW_DIR', 'IN_AGENDAS', 'IN_EPISODES', 'IN_MISC',
-    ]
-    _PROFILE_CFG_ATTRS = [
-        'ROLE', 'COMPANY', 'DOMAIN', 'AUDIENCE', 'MODEL', 'EFFORT', 'AS_OF',
-    ]
-    _PROFILE_COUNT_ATTRS = [
-        '_CORE_COUNT', '_FRONTIER_COUNT', 'CORE_EPS', 'FRONTIER_EPS',
-        'ALL_EPS', 'SYLLABUS_RUNS',
-    ]
-
-    def _save_profile_state(self):
-        self._profile_saved = {}
-        for attr in self._PROFILE_DIR_ATTRS + self._PROFILE_CFG_ATTRS + self._PROFILE_COUNT_ATTRS:
-            self._profile_saved[attr] = getattr(prep, attr)
-        self._saved_domain = prep._DOMAIN.copy()
-
-    def _restore_profile_state(self):
-        for attr, val in self._profile_saved.items():
-            setattr(prep, attr, val)
-        prep._DOMAIN = self._saved_domain
-
-    def _write_profile(self, name, content, base=None):
-        base = base or self.tmpdir
-        d = Path(base) / "profiles" / name
-        d.mkdir(parents=True, exist_ok=True)
-        (d / "profile.md").write_text(content, encoding="utf-8")
-
-    def _write_domain(self, name, domain_files, base=None):
-        """Write domain/ files for a profile. domain_files: dict of fname->content."""
-        base = base or self.tmpdir
-        d = Path(base) / "profiles" / name / "domain"
-        d.mkdir(parents=True, exist_ok=True)
-        for fname, content in domain_files.items():
-            (d / fname).write_text(content, encoding="utf-8")
 
 
 class TestLoadProfile(unittest.TestCase):
@@ -4008,6 +3990,192 @@ class TestAutoSetupStability(_ProfileTestMixin, unittest.TestCase):
             f"Pipeline should have made at least {expected_min_calls} API calls (syllabus + content)")
         # Should show setup message
         self.assertIn("running setup first", output)
+
+
+class TestGetClient(unittest.TestCase):
+    """Test get_client() validation and client creation."""
+
+    def test_missing_key_exits(self):
+        """No OPENAI_API_KEY env var -> SystemExit."""
+        with patch.dict(os.environ, {}, clear=True):
+            os.environ.pop("OPENAI_API_KEY", None)
+            with self.assertRaises(SystemExit):
+                prep.get_client()
+
+    def test_success_returns_client(self):
+        """Key set + openai importable -> returns client."""
+        mock_openai = MagicMock()
+        with patch.dict(os.environ, {"OPENAI_API_KEY": "sk-test"}):
+            with patch.dict('sys.modules', {'openai': mock_openai}):
+                client = prep.get_client()
+                mock_openai.OpenAI.assert_called_once_with(api_key="sk-test")
+
+    def test_import_error_exits(self):
+        """openai not importable -> SystemExit with install hint."""
+        with patch.dict(os.environ, {"OPENAI_API_KEY": "sk-test"}):
+            with patch.dict('sys.modules', {'openai': None}):
+                # Force import to fail by making the module None
+                buf = io.StringIO()
+                with contextlib.redirect_stdout(buf):
+                    with self.assertRaises((SystemExit, TypeError)):
+                        prep.get_client()
+
+
+class TestSetupHelpers(_ProfileTestMixin, unittest.TestCase):
+    """Test setup command helper functions."""
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self._save_profile_state()
+        self._orig_base = prep.BASE_DIR
+        prep.BASE_DIR = Path(self.tmpdir)
+        self._write_profile("test", "---\nrole: SWE\ncompany: Acme\ndomain: Testing\n---\n")
+        prep.set_profile("test")
+
+    def tearDown(self):
+        prep.BASE_DIR = self._orig_base
+        self._restore_profile_state()
+        shutil.rmtree(self.tmpdir)
+
+    def test_setup_instructions_includes_role(self):
+        """Setup instructions should contain ROLE and COMPANY."""
+        result = prep._setup_instructions()
+        self.assertIn(prep.ROLE, result)
+        self.assertIn(prep.COMPANY, result)
+
+    def test_build_setup_prompt_replaces_vars(self):
+        """{ROLE}, {COMPANY}, {DOMAIN} should be replaced in setup prompts."""
+        result = prep._build_setup_prompt("meta-seeds",
+            "profile text", CONTEXT_DOCS="docs text")
+        self.assertNotIn("{ROLE}", result)
+        self.assertNotIn("{COMPANY}", result)
+        self.assertNotIn("{DOMAIN}", result)
+        self.assertIn(prep.ROLE, result)
+        self.assertIn(prep.COMPANY, result)
+
+    def test_build_setup_prompt_extra_kwargs(self):
+        """Extra kwargs like CONTEXT_DOCS should be injected."""
+        result = prep._build_setup_prompt("meta-seeds",
+            "profile text", CONTEXT_DOCS="Special context here")
+        self.assertIn("Special context here", result)
+
+    def test_write_domain_file_skips_when_no_markers(self):
+        """When parsed dict has no matching markers, file should not be written."""
+        domain_dir = Path(self.tmpdir) / "profiles" / "test" / "domain"
+        domain_dir.mkdir(parents=True, exist_ok=True)
+        result = prep._write_domain_file(domain_dir, "test.md", ["FOO", "BAR"], {})
+        self.assertFalse(result)
+        self.assertFalse((domain_dir / "test.md").exists())
+
+
+class TestStatusOutput(_ProfileTestMixin, unittest.TestCase):
+    """Test cmd_status output formatting and warnings."""
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self._save_profile_state()
+        self._orig_base = prep.BASE_DIR
+        prep.BASE_DIR = Path(self.tmpdir)
+
+    def tearDown(self):
+        prep.BASE_DIR = self._orig_base
+        self._restore_profile_state()
+        shutil.rmtree(self.tmpdir)
+
+    def test_show_pipeline_status_counts(self):
+        """Pipeline status should show correct agenda/content counts."""
+        self._write_profile("test", "---\nrole: SWE\ncompany: Acme\ndomain: D\n---\n")
+        self._write_domain("test", {
+            "seeds.md": "<!-- DOMAIN_SEEDS -->\nReal",
+            "coverage.md": "<!-- COVERAGE_FRAMEWORK -->\nReal",
+            "lenses.md": "<!-- DOMAIN_LENS -->\nReal",
+            "gem-sections.md": "<!-- GEM_BOOKSHELF -->\nReal",
+        })
+        prep.set_profile("test")
+        prep.ensure_dirs()
+        # Create 5 agendas and 3 content files
+        for ep in range(1, 6):
+            (prep.SYLLABUS_DIR / prep.ep_file(ep, "agenda")).write_text("agenda", encoding="utf-8")
+        for ep in range(1, 4):
+            (prep.EPISODES_DIR / prep.ep_file(ep, "content")).write_text("content", encoding="utf-8")
+
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            prep.cmd_status(profile_name="test")
+        output = buf.getvalue()
+        self.assertIn("5/", output)  # 5 agendas
+        self.assertIn("3/", output)  # 3 content files
+
+    def test_profile_summary_valid(self):
+        """Profile summary should include role and company."""
+        self._write_profile("test", "---\nrole: Principal Eng\ncompany: BigCo\ndomain: Infra\n---\n")
+        result = prep._profile_summary("test")
+        self.assertIn("Principal Eng", result)
+        self.assertIn("BigCo", result)
+
+    def test_print_syllabus_review_output(self):
+        """Syllabus review checklist should contain key items."""
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            prep._print_syllabus_review("myprofile")
+        output = buf.getvalue()
+        self.assertIn("Review", output)
+        self.assertIn("Episode count", output)
+        self.assertIn("myprofile", output)
+
+    def test_profile_summary_stages(self):
+        """Profile summary should detect pipeline stages."""
+        self._write_profile("empty", "---\nrole: R\ncompany: C\ndomain: D\n---\n")
+        result = prep._profile_summary("empty")
+        self.assertIn("profile created", result)
+
+        # Now with domain files -> "domain ready"
+        self._write_profile("withdom", "---\nrole: R\ncompany: C\ndomain: D\n---\n")
+        self._write_domain("withdom", {
+            "seeds.md": "<!-- DOMAIN_SEEDS -->\nReal",
+            "coverage.md": "<!-- COVERAGE_FRAMEWORK -->\nReal",
+            "lenses.md": "<!-- DOMAIN_LENS -->\nReal",
+            "gem-sections.md": "<!-- GEM_BOOKSHELF -->\nReal",
+        })
+        result = prep._profile_summary("withdom")
+        self.assertIn("domain ready", result)
+
+
+class TestRecoverFromPattern(_ProfileTestMixin, unittest.TestCase):
+    """Test the extracted _recover_from_pattern helper."""
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self._save_profile_state()
+        for attr in ['IN_AGENDAS', 'SYLLABUS_DIR', 'RAW_DIR']:
+            new_dir = Path(self.tmpdir) / attr.lower()
+            new_dir.mkdir(parents=True)
+            setattr(prep, attr, new_dir)
+
+    def tearDown(self):
+        self._restore_profile_state()
+        shutil.rmtree(self.tmpdir)
+
+    def test_core_batch_pattern(self):
+        """_recover_from_pattern('core_batch') should find core batch raw files."""
+        raw_text = "**Episode 1 — Title**\nContent."
+        (prep.RAW_DIR / "syllabus-02-core_batch.md").write_text(raw_text, encoding="utf-8")
+        count = prep._recover_from_pattern("core_batch")
+        self.assertEqual(count, 1)
+        self.assertTrue((prep.SYLLABUS_DIR / "episode-01-agenda.md").exists())
+
+    def test_frontier_pattern(self):
+        """_recover_from_pattern('frontier_digest') should find frontier raw files."""
+        raw_text = "**Frontier Digest A — Updates**\nContent."
+        (prep.RAW_DIR / "syllabus-03-frontier_digest.md").write_text(raw_text, encoding="utf-8")
+        count = prep._recover_from_pattern("frontier_digest")
+        self.assertEqual(count, 1)
+        self.assertTrue((prep.SYLLABUS_DIR / "episode-13-agenda.md").exists())
+
+    def test_no_matching_files(self):
+        """No matching raw files -> 0 recovered."""
+        count = prep._recover_from_pattern("core_batch")
+        self.assertEqual(count, 0)
 
 
 if __name__ == "__main__":
