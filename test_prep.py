@@ -2098,6 +2098,22 @@ class TestBadRequestRetry(unittest.TestCase):
         self.assertEqual(result, "result")
         self.assertEqual(mock_client.responses.create.call_count, 3)
 
+    def test_double_bad_request_second_consumes_attempt(self):
+        """After the free strip retry, subsequent BadRequestErrors consume attempts."""
+        from openai import BadRequestError
+        mock_client = MagicMock()
+        err = BadRequestError(
+            message="Unsupported parameter",
+            response=MagicMock(status_code=400, headers={}),
+            body=None,
+        )
+        # BadRequest -> BadRequest -> BadRequest with retries=2
+        # 1st: free (strip), 2nd: attempt 0->1, 3rd: attempt 1->2 (exhausted)
+        mock_client.responses.create.side_effect = [err, err, err]
+        result = prep.call_llm(mock_client, "instr", "input", retries=2)
+        self.assertIsNone(result)
+        self.assertEqual(mock_client.responses.create.call_count, 3)
+
 
 class TestDynamicConfig(unittest.TestCase):
     def tearDown(self):
@@ -2638,6 +2654,14 @@ class TestContentEpisodeFlag(_ProfileTestMixin, unittest.TestCase):
             prep.ALL_EPS = orig_all
 
         self.assertEqual(client.responses.create.call_count, 2)
+
+    def test_episode_without_force_skips_large_existing(self):
+        """episode=N without --force skips if content exists and is large enough."""
+        (prep.SYLLABUS_DIR / prep.ep_file(3, "agenda")).write_text("agenda 3 " * 50, encoding="utf-8")
+        (prep.EPISODES_DIR / "episode-03-content.md").write_text("existing " * 100, encoding="utf-8")
+        client = MagicMock()
+        prep.cmd_content(client, force=False, episode=3)
+        client.responses.create.assert_not_called()
 
 
 class TestCmdInit(unittest.TestCase):
@@ -4159,6 +4183,66 @@ class TestRecoverFromPattern(_ProfileTestMixin, unittest.TestCase):
         """No matching raw files -> 0 recovered."""
         count = prep._recover_from_pattern("core_batch")
         self.assertEqual(count, 0)
+
+
+class TestMainErrorPaths(_ProfileTestMixin, unittest.TestCase):
+    """Cover main() validation and error branches."""
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self._save_profile_state()
+        self._orig_base = prep.BASE_DIR
+        prep.BASE_DIR = Path(self.tmpdir)
+
+    def tearDown(self):
+        prep.BASE_DIR = self._orig_base
+        self._restore_profile_state()
+        shutil.rmtree(self.tmpdir)
+
+    def test_init_without_name_exits(self):
+        with patch('sys.argv', ['prep.py', 'init']):
+            with self.assertRaises(SystemExit):
+                prep.main()
+
+    def test_api_command_without_profile_exits(self):
+        for cmd in ['syllabus', 'content', 'add', 'setup', 'all']:
+            with patch('sys.argv', ['prep.py', cmd]):
+                with self.assertRaises(SystemExit):
+                    prep.main()
+
+    def test_render_without_file_exits(self):
+        with patch('sys.argv', ['prep.py', 'render']):
+            with self.assertRaises(SystemExit):
+                prep.main()
+
+    def test_render_file_not_found_exits(self):
+        with patch('sys.argv', ['prep.py', 'render', '/nonexistent/file.md']):
+            with self.assertRaises(SystemExit):
+                prep.main()
+
+    def test_add_without_file_exits(self):
+        with patch('sys.argv', ['prep.py', 'add']):
+            with self.assertRaises(SystemExit):
+                prep.main()
+
+    def _setup_valid_profile(self, name="testprof"):
+        """Create a valid profile with non-stub domain files for post-profile-load tests."""
+        profile_content = "---\nrole: Eng\ncompany: Co\ndomain: D\n---\n"
+        self._write_profile(name, profile_content)
+        domain_files = {f: "real content " * 20 for f in prep._DOMAIN_FILES}
+        self._write_domain(name, domain_files)
+
+    def test_invalid_episode_exits(self):
+        self._setup_valid_profile()
+        with patch('sys.argv', ['prep.py', 'content', '--profile', 'testprof', '--episode', '999']):
+            with self.assertRaises(SystemExit):
+                prep.main()
+
+    def test_invalid_gem_slot_exits(self):
+        self._setup_valid_profile()
+        with patch('sys.argv', ['prep.py', 'add', '--profile', 'testprof', '--gem-slot', '999', 'dummy.md']):
+            with self.assertRaises(SystemExit):
+                prep.main()
 
 
 if __name__ == "__main__":

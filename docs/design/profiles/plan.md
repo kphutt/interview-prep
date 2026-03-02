@@ -558,11 +558,11 @@ The interview prompt. Must be a showcase piece — conversational, thorough, and
 
 #### 5.2: ~~Split meta-prompt into focused API calls~~ — superseded by `setup` command
 
-**Superseded:** The three-call approach (seeds+coverage, lenses, gem-sections) was replaced by a single-call `setup` command using `prompts/setup.md`. Implemented in commit 32cd0eb.
+**Superseded:** The three-call approach was refined into `cmd_setup()`, which makes 3 focused API calls using `prompts/meta-seeds.md`, `prompts/meta-lenses.md`, and `prompts/meta-gem.md`.
 
 #### 5.3: ~~`cmd_adapt(name)` command~~ — superseded by `setup` command
 
-**Superseded:** Implemented as `cmd_setup(name)` instead — a single API call that generates all four domain files at once. See `prompts/setup.md`.
+**Superseded:** Implemented as `cmd_setup(name)` — three API calls generating all four domain files. Uses `prompts/meta-seeds.md`, `prompts/meta-lenses.md`, and `prompts/meta-gem.md`.
 
 #### 5.4: End-to-end workflow [DONE — see `docs/design/workflow.md`]
 
