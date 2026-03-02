@@ -27,7 +27,7 @@ set -a && source .env && set +a
 python3 prep.py init my-domain
 ```
 
-Creates `profiles/my-domain/` with template `profile.md` and 4 adapted stub files.
+Creates `profiles/my-domain/` with template `profile.md` and 4 domain stub files.
 
 **Friction:**
 - **[Low]** No friction — this step works cleanly. Profile name validation catches bad names immediately.
@@ -42,7 +42,7 @@ User fills in `role`, `company`, `domain`, and optional fields in YAML frontmatt
 - **[Medium]** Profile fields not validated until `setup` or `syllabus` runs. A blank `role:` or missing `domain:` field produces a `SystemExit` at the start of the next command — clear error message, but the user has already context-switched away from the editor.
 - **[Low]** No guidance on what makes a good `domain` value. Too broad ("Engineering") or too narrow ("OAuth token binding for mobile apps") both produce suboptimal syllabuses.
 
-## Step 4: `setup` — generate adapted files
+## Step 4: `setup` — generate domain files
 
 **Type:** Automated (or manual alternative via `prompts/intake.md`)
 
@@ -50,11 +50,11 @@ User fills in `role`, `company`, `domain`, and optional fields in YAML frontmatt
 python3 prep.py setup --profile my-domain
 ```
 
-Calls LLM once to generate 4 adapted files (`seeds.md`, `coverage.md`, `lenses.md`, `gem-sections.md`).
+Calls LLM 3 times to generate 4 domain files (`seeds.md`, `coverage.md`, `lenses.md`, `gem-sections.md`).
 
 **Friction:**
 - **[High]** Setup parse failures are silent. If the LLM response doesn't contain `=== FILE: ===` delimiters in the expected format, the raw response is saved to `setup-raw.md` but the user gets a generic "Could not parse response" error with no guidance on how to fix it.
-- **[Medium]** Adapted file marker format is fragile. Markers must be exactly `<!-- WORD -->` (HTML comment, single word, one space padding). Extra whitespace, missing spaces, or multi-word markers silently fail to match — the content is written but never injected into prompts.
+- **[Medium]** Domain file marker format is fragile. Markers must be exactly `<!-- WORD -->` (HTML comment, single word, one space padding). Extra whitespace, missing spaces, or multi-word markers silently fail to match — the content is written but never injected into prompts.
 - **[Low]** The manual alternative (`prompts/intake.md` pasted into an external AI) requires a context switch to another tool. The `setup` command eliminates this but costs ~$2.
 
 ## Step 5: `syllabus` — generate agendas

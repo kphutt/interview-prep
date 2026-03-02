@@ -2,7 +2,7 @@
 
 **Last updated: Feb 17, 2026**
 
-Cross-references: [brainstorm.md](brainstorm.md) | [decisions.md](decisions.md) | [backlog.md](../backlog.md)
+Cross-references: [brainstorm.md](brainstorm.md) | [decisions](../../decisions/) | [ROADMAP](../../../ROADMAP.md)
 
 ---
 
@@ -57,7 +57,7 @@ Env vars `PREP_CORE_EPISODES` (default 12) and `PREP_FRONTIER_EPISODES` (default
 
 **Verification:** 170 tests, all pass. Smoke test passes with `PREP_CORE_EPISODES=1 PREP_FRONTIER_EPISODES=0`.
 
-**Decision recorded:** [decisions.md #10](decisions.md)
+**Decision recorded:** [decision 0010](../../decisions/0010-dynamic-episode-counts-implementation.md)
 
 ---
 

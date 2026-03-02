@@ -2,7 +2,7 @@
 """
 prep.py - Interview Prep Content Pipeline
 ==========================================
-Automates: Syllabus (8 runs) -> Content (per episode) -> Package (Gem + NotebookLM)
+Automates: Syllabus -> Content (per episode) -> Package (Gem + NotebookLM)
 
 Usage:
     python prep.py init <profile-name>                    # Create new profile skeleton
@@ -582,7 +582,7 @@ def _syllabus_instructions():
 
 def _content_instructions():
     """System instructions for content generation (dynamic for profile support)."""
-    return f"You are a {ROLE} at {COMPANY} acting as an expert interview coach. Generate a dense, Staff-level technical content document. Output ONLY the content document."
+    return f"You are a {ROLE} at {COMPANY} acting as an expert interview coach. Generate a dense, {ROLE}-level technical content document. Output ONLY the content document."
 
 def _distill_instructions():
     """System instructions for document distillation (dynamic for profile support)."""
@@ -758,15 +758,15 @@ def cmd_syllabus(client, force=False):
 def _print_syllabus_review(profile_name):
     """Print review checklist after standalone syllabus generation."""
     total = len(ALL_EPS)
-    print(f"Review before running content generation:")
-    print(f"")
+    print("Review before running content generation:")
+    print()
     print(f"  [ ] Episode count matches expectations ({total} episodes)")
-    print(f"  [ ] Topics cover JD requirements (cross-reference with domain/coverage.md)")
-    print(f"  [ ] No duplicate topics across episodes")
-    print(f"  [ ] No obvious domain gaps")
-    print(f"  [ ] Frontier digests cover emerging/advanced topics")
-    print(f"  [ ] Mental models are distinct (not variations of the same idea)")
-    print(f"")
+    print("  [ ] Topics cover JD requirements (cross-reference with domain/coverage.md)")
+    print("  [ ] No duplicate topics across episodes")
+    print("  [ ] No obvious domain gaps")
+    print("  [ ] Frontier digests cover emerging/advanced topics")
+    print("  [ ] Mental models are distinct (not variations of the same idea)")
+    print()
     print(f"Satisfied? Run: python3 prep.py content --profile {profile_name}")
     print(f"To regenerate: python3 prep.py syllabus --profile {profile_name} --force")
 

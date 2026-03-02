@@ -35,7 +35,7 @@ Key principle: **be cheap early, expensive late.** No API cost until the user ha
 | Interview schedule + focus areas | Determines scope, depth, episode count | In `profile.md` |
 | Extra context (facts, concepts, articles) | Domain knowledge that seeds the syllabus | `profiles/{name}/inputs/context/` |
 
-Additional inputs (resume, interviewer info) are tracked in the [backlog](../backlog.md).
+Additional inputs (resume, interviewer info) are tracked in the [ROADMAP](../../../ROADMAP.md).
 
 ## Use cases
 
@@ -44,7 +44,7 @@ Additional inputs (resume, interviewer info) are tracked in the [backlog](../bac
 | Specific job | JD + company + scheduled interviews | Days to weeks | Focused on gaps, interviewer-aware |
 | General job search | Role type + company tier | Weeks to months | Broader coverage |
 
-Additional use cases (certification, learning) are tracked in the [backlog](../backlog.md).
+Additional use cases (certification, learning) are tracked in the [ROADMAP](../../../ROADMAP.md).
 
 ## Profile directory structure
 
@@ -63,7 +63,7 @@ profiles/
       ...
 ```
 
-Settled decisions: [decisions.md](decisions.md)
+Settled decisions: [docs/decisions/](../../decisions/)
 
 ## Existing code that needs to change
 

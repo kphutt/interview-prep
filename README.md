@@ -69,15 +69,7 @@ export OPENAI_API_KEY=sk-...    # get one at platform.openai.com
 python3 prep.py all --profile smoketest --yes    # add --force to re-run
 ```
 
-### Build your own profile
-
-```bash
-python3 prep.py init my-domain
-# Edit profiles/my-domain/profile.md — set your role, company, and domain
-python3 prep.py all --profile my-domain    # auto-runs setup, then syllabus + content + package
-```
-
-Outputs land in `profiles/my-domain/outputs/`. See [Using the Outputs](#using-the-outputs) for NotebookLM and Gem setup.
+Outputs land in `profiles/<name>/outputs/`. See [Using the Outputs](#using-the-outputs) for NotebookLM and Gem setup.
 
 ## Troubleshooting
 
@@ -157,7 +149,7 @@ All API commands (`all`, `syllabus`, `content`, `add`, `setup`) require `--profi
 | `prep.py syllabus --profile P` | Generate agendas only (8 API calls) |
 | `prep.py content --profile P` | Generate content for existing agendas |
 | `prep.py content --profile P --episode 5` | Generate content for one episode |
-| `prep.py add doc.pdf --profile P` | Distill doc -> content -> package |
+| `prep.py add doc.md --profile P` | Distill doc -> content -> package |
 | `prep.py package --profile P` | Repackage outputs into Gem + NotebookLM |
 | `prep.py render prompts/gem.md --profile P` | Substitute vars and print to stdout |
 | `prep.py status` | List all profiles |
