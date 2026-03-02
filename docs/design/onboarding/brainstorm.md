@@ -1,5 +1,7 @@
 # Onboarding Friction — Brainstorm
 
+**Author**: Karsten Huttelmaier — co-authored with Claude
+
 Vision: collapse `init` → edit → `setup` → `all` down to `init` → edit → `all`.
 
 ## Friction points identified

@@ -1,5 +1,6 @@
 # Brainstorm: Profiles, Intake, and Dynamic Pipeline
 
+**Author**: Karsten Huttelmaier — co-authored with Claude
 **Status: Brainstorm — not a plan yet. Captured Feb 14, 2026.**
 
 ---

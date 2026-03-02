@@ -1,5 +1,6 @@
 # Plan: Profiles, Intake, and Dynamic Pipeline — DONE
 
+**Author**: Karsten Huttelmaier — co-authored with Claude
 **Last updated: Feb 17, 2026**
 
 Cross-references: [brainstorm.md](brainstorm.md) | [decisions](../../decisions/) | [ROADMAP](../../../ROADMAP.md)

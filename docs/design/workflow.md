@@ -1,5 +1,7 @@
 # End-to-End Workflow Reference
 
+**Author**: Karsten Huttelmaier — co-authored with Claude
+
 Current-state snapshot of the full journey from clone to podcast. Captures every step, mixing automated pipeline commands with manual platform actions.
 
 For details on env vars, troubleshooting, domain file markers, and API config, see the [README](../../README.md).

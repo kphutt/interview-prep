@@ -1,5 +1,7 @@
 # Friction audit — full pipeline walkthrough
 
+**Author**: Karsten Huttelmaier — co-authored with Claude
+
 Walkthrough of the complete workflow from clone to using outputs in NotebookLM/Gem. Each step tagged as automated, manual, or mixed, with friction points and severity.
 
 ## Step 1: Clone + install + env setup
