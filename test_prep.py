@@ -1042,25 +1042,23 @@ class TestReplayRealOutput(unittest.TestCase):
         self.assertNotIn("Confused Deputy", result[1])
 
 
-class TestRecoveryCalledByAllCommands(unittest.TestCase):
+class TestRecoveryCalledByAllCommands(_ProfileTestMixin, unittest.TestCase):
     """Verify recovery runs in status, syllabus, and content commands.
     Bug found in review round 6: status and syllabus didn't call recovery,
     so user would see 0 agendas or re-run all 8 syllabus calls."""
 
     def setUp(self):
         self.tmpdir = tempfile.mkdtemp()
-        self._orig = {}
+        self._save_profile_state()
         for attr in ['IN_AGENDAS', 'IN_EPISODES', 'SYLLABUS_DIR', 'EPISODES_DIR',
                       'RAW_DIR', 'GEM_DIR', 'NLM_DIR']:
-            self._orig[attr] = getattr(prep, attr)
             new_dir = Path(self.tmpdir) / attr.lower()
             new_dir.mkdir(parents=True)
             setattr(prep, attr, new_dir)
 
     def tearDown(self):
+        self._restore_profile_state()
         shutil.rmtree(self.tmpdir)
-        for attr, val in self._orig.items():
-            setattr(prep, attr, val)
 
     def _seed_raw(self):
         """Put a raw core_batch file that needs recovery."""
@@ -1134,25 +1132,23 @@ class TestRecoveryCalledByAllCommands(unittest.TestCase):
         client.responses.create.assert_called_once()
 
 
-class TestEndToEndResume(unittest.TestCase):
+class TestEndToEndResume(_ProfileTestMixin, unittest.TestCase):
     """Simulate the exact morning scenario: raw files exist from overnight,
     zero agenda files, zero content. Run cmd_all with new code.
     Verify: recovery -> skip all syllabus -> generate all content -> package."""
 
     def setUp(self):
         self.tmpdir = tempfile.mkdtemp()
-        self._orig = {}
+        self._save_profile_state()
         for attr in ['IN_AGENDAS', 'IN_EPISODES', 'SYLLABUS_DIR', 'EPISODES_DIR',
                       'RAW_DIR', 'GEM_DIR', 'NLM_DIR', 'IN_MISC']:
-            self._orig[attr] = getattr(prep, attr)
             new_dir = Path(self.tmpdir) / attr.lower()
             new_dir.mkdir(parents=True)
             setattr(prep, attr, new_dir)
 
     def tearDown(self):
+        self._restore_profile_state()
         shutil.rmtree(self.tmpdir)
-        for attr, val in self._orig.items():
-            setattr(prep, attr, val)
 
     def _seed_overnight_state(self):
         """Simulate what the old code leaves behind: raw files + scaffold + final_merge.
@@ -1336,20 +1332,18 @@ class TestPromptTemplateStructure(unittest.TestCase):
         self.assertIn("{RAW_DOCUMENT}", t)
 
 
-class TestCmdAdd(unittest.TestCase):
+class TestCmdAdd(_ProfileTestMixin, unittest.TestCase):
     def setUp(self):
         self.tmpdir = tempfile.mkdtemp()
-        self._orig = {}
+        self._save_profile_state()
         for attr in ['SYLLABUS_DIR', 'EPISODES_DIR', 'GEM_DIR', 'NLM_DIR']:
-            self._orig[attr] = getattr(prep, attr)
             new_dir = Path(self.tmpdir) / attr.lower()
             new_dir.mkdir(parents=True)
             setattr(prep, attr, new_dir)
 
     def tearDown(self):
+        self._restore_profile_state()
         shutil.rmtree(self.tmpdir)
-        for attr, val in self._orig.items():
-            setattr(prep, attr, val)
 
     def test_add_creates_agenda_and_content(self):
         src = Path(self.tmpdir) / "test-paper.md"
@@ -1406,21 +1400,19 @@ class TestCmdAdd(unittest.TestCase):
         self.assertTrue((prep.GEM_DIR / "gem-3.md").exists())
 
 
-class TestWriteManifest(unittest.TestCase):
+class TestWriteManifest(_ProfileTestMixin, unittest.TestCase):
     def setUp(self):
         self.tmpdir = tempfile.mkdtemp()
-        self._orig = {}
+        self._save_profile_state()
         for attr in ['IN_AGENDAS', 'IN_EPISODES', 'SYLLABUS_DIR', 'EPISODES_DIR',
                       'GEM_DIR', 'NLM_DIR', 'OUTPUTS']:
-            self._orig[attr] = getattr(prep, attr)
             new_dir = Path(self.tmpdir) / attr.lower()
             new_dir.mkdir(parents=True)
             setattr(prep, attr, new_dir)
 
     def tearDown(self):
+        self._restore_profile_state()
         shutil.rmtree(self.tmpdir)
-        for attr, val in self._orig.items():
-            setattr(prep, attr, val)
 
     def test_manifest_created(self):
         (prep.SYLLABUS_DIR / "episode-01-agenda.md").write_text("agenda", encoding="utf-8")
@@ -1444,21 +1436,19 @@ class TestWriteManifest(unittest.TestCase):
         self.assertIn("suspiciously small", text)
 
 
-class TestContentEdgeCases(unittest.TestCase):
+class TestContentEdgeCases(_ProfileTestMixin, unittest.TestCase):
     def setUp(self):
         self.tmpdir = tempfile.mkdtemp()
-        self._orig = {}
+        self._save_profile_state()
         for attr in ['IN_AGENDAS', 'IN_EPISODES', 'SYLLABUS_DIR', 'EPISODES_DIR',
                       'RAW_DIR', 'GEM_DIR', 'NLM_DIR']:
-            self._orig[attr] = getattr(prep, attr)
             new_dir = Path(self.tmpdir) / attr.lower()
             new_dir.mkdir(parents=True)
             setattr(prep, attr, new_dir)
 
     def tearDown(self):
+        self._restore_profile_state()
         shutil.rmtree(self.tmpdir)
-        for attr, val in self._orig.items():
-            setattr(prep, attr, val)
 
     def test_content_warns_on_missing_agenda(self):
         """Episode with no agenda should warn, not crash."""
@@ -1707,21 +1697,19 @@ class TestGemSlotCoverage(unittest.TestCase):
         self.assertEqual(core_slots, {1, 2, 3, 4, 5, 6})
 
 
-class TestPackageGemScaffold(unittest.TestCase):
+class TestPackageGemScaffold(_ProfileTestMixin, unittest.TestCase):
     def setUp(self):
         self.tmpdir = tempfile.mkdtemp()
-        self._orig = {}
+        self._save_profile_state()
         for attr in ['IN_AGENDAS', 'IN_EPISODES', 'SYLLABUS_DIR', 'EPISODES_DIR',
                       'RAW_DIR', 'GEM_DIR', 'NLM_DIR']:
-            self._orig[attr] = getattr(prep, attr)
             new_dir = Path(self.tmpdir) / attr.lower()
             new_dir.mkdir(parents=True)
             setattr(prep, attr, new_dir)
 
     def tearDown(self):
+        self._restore_profile_state()
         shutil.rmtree(self.tmpdir)
-        for attr, val in self._orig.items():
-            setattr(prep, attr, val)
 
     def test_scaffold_copied_to_gem0(self):
         (prep.SYLLABUS_DIR / "scaffold.md").write_text("scaffold content here", encoding="utf-8")
@@ -1874,22 +1862,19 @@ class TestDynamicGemSlot(unittest.TestCase):
         self.assertEqual(prep.gem_slot(99, 6, []), 4)  # no frontier slot, misc = ceil(6/2)+1
 
 
-class TestDynamicManifest(unittest.TestCase):
+class TestDynamicManifest(_ProfileTestMixin, unittest.TestCase):
     def setUp(self):
         self.tmpdir = tempfile.mkdtemp()
-        self._orig = {}
+        self._save_profile_state()
         for attr in ['IN_AGENDAS', 'IN_EPISODES', 'SYLLABUS_DIR', 'EPISODES_DIR',
                       'GEM_DIR', 'NLM_DIR', 'OUTPUTS']:
-            self._orig[attr] = getattr(prep, attr)
             new_dir = Path(self.tmpdir) / attr.lower()
             new_dir.mkdir(parents=True)
             setattr(prep, attr, new_dir)
 
     def tearDown(self):
-        prep._reconfigure()
+        self._restore_profile_state()
         shutil.rmtree(self.tmpdir)
-        for attr, val in self._orig.items():
-            setattr(prep, attr, val)
 
     def test_uses_dynamic_total(self):
         prep._reconfigure(8, 2)
@@ -2579,23 +2564,21 @@ class TestEnhancedStatus(_ProfileTestMixin, unittest.TestCase):
         self.assertIn("Pipeline complete!", output)
 
 
-class TestContentEpisodeFlag(unittest.TestCase):
+class TestContentEpisodeFlag(_ProfileTestMixin, unittest.TestCase):
     """Step 5: --episode N for content command."""
 
     def setUp(self):
         self.tmpdir = tempfile.mkdtemp()
-        self._orig = {}
+        self._save_profile_state()
         for attr in ['IN_AGENDAS', 'IN_EPISODES', 'SYLLABUS_DIR', 'EPISODES_DIR',
                       'RAW_DIR', 'GEM_DIR', 'NLM_DIR']:
-            self._orig[attr] = getattr(prep, attr)
             new_dir = Path(self.tmpdir) / attr.lower()
             new_dir.mkdir(parents=True)
             setattr(prep, attr, new_dir)
 
     def tearDown(self):
+        self._restore_profile_state()
         shutil.rmtree(self.tmpdir)
-        for attr, val in self._orig.items():
-            setattr(prep, attr, val)
 
     def test_generates_only_specified_episode(self):
         for ep in [1, 2, 3]:
