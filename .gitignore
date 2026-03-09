@@ -1,12 +1,3 @@
-# Environment & secrets
-.env
-.env.local
-*.pem
-*.key
-
-# Claude Code
-.claude/
-
 # Python
 __pycache__/
 .pytest_cache/
@@ -18,12 +9,21 @@ venv/
 .DS_Store
 Thumbs.db
 
-# Logs
-debug.log
-
 # Editor
 .idea/
 .vscode/
+
+# Claude Code
+.claude/
+
+# Logs
+debug.log
+
+# Environment & secrets
+.env
+.env.local
+*.pem
+*.key
 
 # Project-specific
 *.xlsx
