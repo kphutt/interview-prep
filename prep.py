@@ -1354,7 +1354,8 @@ Next steps:
 
 
 def cmd_all(client, force=False, profile_name=None):
-    """Run the full pipeline: setup (if needed) -> syllabus -> content -> package."""
+    """Run the full pipeline: setup (if needed) -> syllabus -> content -> package.
+    Returns True if syllabus and content both succeeded."""
     print("\n" + "="*60)
     print("  FULL PIPELINE")
     print("="*60 + "\n")
@@ -1365,14 +1366,14 @@ def cmd_all(client, force=False, profile_name=None):
         ok = cmd_setup(client, profile_name, force=False)  # never force setup from all
         if not ok:
             print("\n  ERROR: Setup failed. Cannot continue pipeline.\n")
-            return
+            return False
         global _DOMAIN
         _DOMAIN = _load_domain(profile_name)
         if _needs_setup(profile_name):
             print("\n  ERROR: Domain files still incomplete after setup.")
             print(f"  Run 'python prep.py setup --profile {profile_name} --force' to retry.")
             print("  Check outputs/raw/ for details.\n")
-            return
+            return False
         print()
 
     # Detect already-complete pipeline
@@ -1383,12 +1384,12 @@ def cmd_all(client, force=False, profile_name=None):
         if agendas == total and contents == total:
             print("  Pipeline already complete — all agendas and content exist.")
             print("  To regenerate, run again with --force.\n")
-            return
+            return True
 
-    ok = cmd_syllabus(client, force)
-    if not ok:
+    syllabus_ok = cmd_syllabus(client, force)
+    if not syllabus_ok:
         print("\n  WARNING: Syllabus had failures. Content will skip missing agendas.\n")
-    cmd_content(client, force)
+    content_ok = cmd_content(client, force)
     cmd_package()
     write_manifest()
 
@@ -1397,6 +1398,7 @@ def cmd_all(client, force=False, profile_name=None):
     print(f"  NotebookLM -> {NLM_DIR}/")
     print(f"  Gem        -> {GEM_DIR}/")
     print("="*60 + "\n")
+    return syllabus_ok and content_ok
 
 # ---------------------------------------------------------------------------
 # MAIN
@@ -1486,18 +1488,27 @@ def main():
         print("Cancelled.")
         return
 
-    if args.command == "all":      cmd_all(client, force, profile_name=args.profile)
+    if args.command == "all":
+        if not cmd_all(client, force, profile_name=args.profile):
+            sys.exit(1)
     elif args.command == "syllabus":
         ok = cmd_syllabus(client, force)
         if ok:
             _print_syllabus_review(args.profile)
-    elif args.command == "content":  cmd_content(client, force, episode=args.episode)
-    elif args.command == "setup":    cmd_setup(client, args.profile, force)
+        else:
+            sys.exit(1)
+    elif args.command == "content":
+        if not cmd_content(client, force, episode=args.episode):
+            sys.exit(1)
+    elif args.command == "setup":
+        if not cmd_setup(client, args.profile, force):
+            sys.exit(1)
     elif args.command == "add":
         if not args.file:
             print("Usage: python prep.py add <file> [--gem-slot N]")
             sys.exit(1)
-        cmd_add(client, args.file, args.gem_slot)
+        if not cmd_add(client, args.file, args.gem_slot):
+            sys.exit(1)
 
 if __name__ == "__main__":
     main()
