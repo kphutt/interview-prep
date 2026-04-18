@@ -1107,7 +1107,9 @@ def cmd_status(profile_name=None):
     if profile_name:
         # Show pipeline status for specific profile
         print(f"Profile: {profile_name} ({ROLE} @ {COMPANY})\n")
-        print(f"  Config:        {_CORE_COUNT} core + {_FRONTIER_COUNT} frontier episodes, model={MODEL}\n")
+        print(f"  Config:        {_CORE_COUNT} core + {_FRONTIER_COUNT} frontier episodes, model={MODEL}")
+        key = os.environ.get("OPENAI_API_KEY", "")
+        print(f"  API key:       {'set' if key else 'NOT SET'}\n")
 
         # Pipeline checklist
         profile_dir = BASE_DIR / "profiles" / profile_name
