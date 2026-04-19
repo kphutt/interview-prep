@@ -1395,6 +1395,8 @@ def cmd_all(client, force=False, profile_name=None):
     if not syllabus_ok:
         print("\n  WARNING: Syllabus had failures. Content will skip missing agendas.\n")
     content_ok = cmd_content(client, force)
+    # Package whatever succeeded — partial output is still useful for the user
+    # to inspect; cmd_all's return value surfaces the failure to the shell.
     cmd_package()
     write_manifest()
 
