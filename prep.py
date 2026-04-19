@@ -839,7 +839,7 @@ def cmd_package():
     for ep, txt in content.items():
         (NLM_DIR / ep_file(ep, "content")).write_text(txt, encoding="utf-8")
     for f in misc_files:
-        (NLM_DIR / f.name).write_text(f.read_text(encoding="utf-8"))
+        (NLM_DIR / f.name).write_text(f.read_text(encoding="utf-8"), encoding="utf-8")
     print(f"  NotebookLM: {len(content) + len(misc_files)} files")
 
     # Gem: dynamic merged files
@@ -861,7 +861,7 @@ def cmd_package():
     # Copy scaffold/merge for reference
     for n in ["scaffold.md", "final_merge.md"]:
         src = SYLLABUS_DIR / n
-        if src.exists(): (GEM_DIR / f"gem-0-{n}").write_text(src.read_text(encoding="utf-8"))
+        if src.exists(): (GEM_DIR / f"gem-0-{n}").write_text(src.read_text(encoding="utf-8"), encoding="utf-8")
 
     print(f"\n=== PACKAGE COMPLETE ===")
     print(f"  NotebookLM -> {NLM_DIR}/")
@@ -1056,10 +1056,16 @@ def _show_pipeline_status():
     nlm = list(NLM_DIR.glob("*.md"))
     print(f"NotebookLM: {len(nlm)} files")
 
-    key = os.environ.get("OPENAI_API_KEY", "")
     print(f"\nModel: {MODEL} (effort={EFFORT})")
-    print(f"API key: {'set' if key else 'NOT SET'}")
+    print(f"API key: {_api_key_status()}")
     print(f"As-of: {AS_OF}\n")
+
+
+def _api_key_status():
+    """Return 'set' or 'NOT SET' with a remediation hint when unset."""
+    if os.environ.get("OPENAI_API_KEY"):
+        return "set"
+    return "NOT SET  (run: export OPENAI_API_KEY=sk-... or source .env)"
 
 
 def _profile_summary(name):
@@ -1107,7 +1113,8 @@ def cmd_status(profile_name=None):
     if profile_name:
         # Show pipeline status for specific profile
         print(f"Profile: {profile_name} ({ROLE} @ {COMPANY})\n")
-        print(f"  Config:        {_CORE_COUNT} core + {_FRONTIER_COUNT} frontier episodes, model={MODEL}\n")
+        print(f"  Config:        {_CORE_COUNT} core + {_FRONTIER_COUNT} frontier episodes, model={MODEL}")
+        print(f"  API key:       {_api_key_status()}\n")
 
         # Pipeline checklist
         profile_dir = BASE_DIR / "profiles" / profile_name
@@ -1352,7 +1359,8 @@ Next steps:
 
 
 def cmd_all(client, force=False, profile_name=None):
-    """Run the full pipeline: setup (if needed) -> syllabus -> content -> package."""
+    """Run the full pipeline: setup (if needed) -> syllabus -> content -> package.
+    Returns True if syllabus and content both succeeded."""
     print("\n" + "="*60)
     print("  FULL PIPELINE")
     print("="*60 + "\n")
@@ -1363,14 +1371,14 @@ def cmd_all(client, force=False, profile_name=None):
         ok = cmd_setup(client, profile_name, force=False)  # never force setup from all
         if not ok:
             print("\n  ERROR: Setup failed. Cannot continue pipeline.\n")
-            return
+            return False
         global _DOMAIN
         _DOMAIN = _load_domain(profile_name)
         if _needs_setup(profile_name):
             print("\n  ERROR: Domain files still incomplete after setup.")
             print(f"  Run 'python prep.py setup --profile {profile_name} --force' to retry.")
             print("  Check outputs/raw/ for details.\n")
-            return
+            return False
         print()
 
     # Detect already-complete pipeline
@@ -1381,12 +1389,14 @@ def cmd_all(client, force=False, profile_name=None):
         if agendas == total and contents == total:
             print("  Pipeline already complete — all agendas and content exist.")
             print("  To regenerate, run again with --force.\n")
-            return
+            return True
 
-    ok = cmd_syllabus(client, force)
-    if not ok:
+    syllabus_ok = cmd_syllabus(client, force)
+    if not syllabus_ok:
         print("\n  WARNING: Syllabus had failures. Content will skip missing agendas.\n")
-    cmd_content(client, force)
+    content_ok = cmd_content(client, force)
+    # Package whatever succeeded — partial output is still useful for the user
+    # to inspect; cmd_all's return value surfaces the failure to the shell.
     cmd_package()
     write_manifest()
 
@@ -1395,6 +1405,7 @@ def cmd_all(client, force=False, profile_name=None):
     print(f"  NotebookLM -> {NLM_DIR}/")
     print(f"  Gem        -> {GEM_DIR}/")
     print("="*60 + "\n")
+    return syllabus_ok and content_ok
 
 # ---------------------------------------------------------------------------
 # MAIN
@@ -1482,20 +1493,29 @@ def main():
     num_calls = call_counts.get(args.command, 0)
     if num_calls and not _confirm_cost(num_calls, yes=args.yes):
         print("Cancelled.")
-        return
+        sys.exit(130)
 
-    if args.command == "all":      cmd_all(client, force, profile_name=args.profile)
+    if args.command == "all":
+        if not cmd_all(client, force, profile_name=args.profile):
+            sys.exit(1)
     elif args.command == "syllabus":
         ok = cmd_syllabus(client, force)
         if ok:
             _print_syllabus_review(args.profile)
-    elif args.command == "content":  cmd_content(client, force, episode=args.episode)
-    elif args.command == "setup":    cmd_setup(client, args.profile, force)
+        else:
+            sys.exit(1)
+    elif args.command == "content":
+        if not cmd_content(client, force, episode=args.episode):
+            sys.exit(1)
+    elif args.command == "setup":
+        if not cmd_setup(client, args.profile, force):
+            sys.exit(1)
     elif args.command == "add":
         if not args.file:
             print("Usage: python prep.py add <file> [--gem-slot N]")
             sys.exit(1)
-        cmd_add(client, args.file, args.gem_slot)
+        if not cmd_add(client, args.file, args.gem_slot):
+            sys.exit(1)
 
 if __name__ == "__main__":
     main()

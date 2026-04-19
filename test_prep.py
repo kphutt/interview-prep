@@ -844,7 +844,7 @@ class TestCmdAllAlreadyComplete(_ProfileTestMixin, unittest.TestCase):
         shutil.rmtree(self.tmpdir)
 
     def test_skips_when_complete(self):
-        """cmd_all should print message and return without API calls when all outputs exist."""
+        """cmd_all should print message and return True when all outputs exist."""
         for ep in prep.ALL_EPS:
             (prep.SYLLABUS_DIR / prep.ep_file(ep, "agenda")).write_text("agenda", encoding="utf-8")
             (prep.EPISODES_DIR / prep.ep_file(ep, "content")).write_text("x" * 500, encoding="utf-8")
@@ -852,11 +852,12 @@ class TestCmdAllAlreadyComplete(_ProfileTestMixin, unittest.TestCase):
         client = MagicMock()
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
-            prep.cmd_all(client)
+            result = prep.cmd_all(client)
         output = buf.getvalue()
         self.assertIn("already complete", output)
         self.assertIn("--force", output)
         client.responses.create.assert_not_called()
+        self.assertIs(result, True)
 
     def test_runs_when_incomplete(self):
         """cmd_all should proceed normally when outputs are missing."""
@@ -2460,7 +2461,9 @@ class TestCostEstimates(unittest.TestCase):
                 (profile_dir / "domain" / fname).write_text(
                     f"<!-- PLACEHOLDER -->\nreal content\n", encoding="utf-8")
             with patch('sys.argv', ['prep.py', 'syllabus', '--profile', 'testcost']):
-                prep.main()
+                with self.assertRaises(SystemExit) as cm:
+                    prep.main()
+                self.assertEqual(cm.exception.code, 130)
             mock_confirm.assert_called_once()
             mock_client.return_value.responses.create.assert_not_called()
         finally:
@@ -2578,6 +2581,37 @@ class TestEnhancedStatus(_ProfileTestMixin, unittest.TestCase):
             prep.cmd_status(profile_name="myprep")
         output = f.getvalue()
         self.assertIn("Pipeline complete!", output)
+
+    def test_profile_view_shows_api_key_set(self):
+        """status --profile should show 'API key: set' when env var present."""
+        self._write_profile("myprep", "---\nrole: SWE\ncompany: Acme\ndomain: D\n---\n")
+        prep.set_profile("myprep")
+        prep.ensure_dirs()
+
+        import io
+        from contextlib import redirect_stdout
+        with patch.dict(os.environ, {"OPENAI_API_KEY": "sk-fake"}):
+            with redirect_stdout(io.StringIO()) as f:
+                prep.cmd_status(profile_name="myprep")
+        output = f.getvalue()
+        self.assertIn("API key:", output)
+        self.assertIn("set", output)
+        self.assertNotIn("NOT SET", output)
+
+    def test_profile_view_shows_api_key_not_set(self):
+        """status --profile should show 'API key: NOT SET' when env var absent."""
+        self._write_profile("myprep", "---\nrole: SWE\ncompany: Acme\ndomain: D\n---\n")
+        prep.set_profile("myprep")
+        prep.ensure_dirs()
+
+        import io
+        from contextlib import redirect_stdout
+        with patch.dict(os.environ, {"OPENAI_API_KEY": ""}):
+            with redirect_stdout(io.StringIO()) as f:
+                prep.cmd_status(profile_name="myprep")
+        output = f.getvalue()
+        self.assertIn("API key:", output)
+        self.assertIn("NOT SET", output)
 
 
 class TestContentEpisodeFlag(_ProfileTestMixin, unittest.TestCase):
@@ -3780,17 +3814,18 @@ class TestCmdAllAutoSetup(_ProfileTestMixin, unittest.TestCase):
 
     @patch('prep.cmd_setup')
     def test_all_stops_if_setup_fails(self, mock_setup):
-        """Setup returns False -> no syllabus/content calls."""
+        """Setup returns False -> no syllabus/content calls, cmd_all returns False."""
         self._setup_stub_profile("test")
         mock_setup.return_value = False
 
         client = MagicMock()
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
-            prep.cmd_all(client, force=False, profile_name="test")
+            result = prep.cmd_all(client, force=False, profile_name="test")
 
         self.assertIn("Setup failed", buf.getvalue())
         client.responses.create.assert_not_called()
+        self.assertIs(result, False)
 
     @patch('prep.cmd_setup')
     def test_all_skips_setup_when_populated(self, mock_setup):
@@ -3819,7 +3854,8 @@ class TestCmdAllAutoSetup(_ProfileTestMixin, unittest.TestCase):
         self._setup_stub_profile("testcost")
 
         with patch('sys.argv', ['prep.py', 'all', '--profile', 'testcost']):
-            prep.main()
+            with self.assertRaises(SystemExit):
+                prep.main()
 
         # Cost should include setup calls (3 extra)
         expected = len(prep.SYLLABUS_RUNS) + len(prep.ALL_EPS) + 3
@@ -3834,7 +3870,8 @@ class TestCmdAllAutoSetup(_ProfileTestMixin, unittest.TestCase):
         self._setup_populated_profile("testcost")
 
         with patch('sys.argv', ['prep.py', 'all', '--profile', 'testcost']):
-            prep.main()
+            with self.assertRaises(SystemExit):
+                prep.main()
 
         expected = len(prep.SYLLABUS_RUNS) + len(prep.ALL_EPS)
         mock_confirm.assert_called_once_with(expected, yes=False)
@@ -4243,6 +4280,17 @@ class TestMainErrorPaths(_ProfileTestMixin, unittest.TestCase):
         with patch('sys.argv', ['prep.py', 'add', '--profile', 'testprof', '--gem-slot', '999', 'dummy.md']):
             with self.assertRaises(SystemExit):
                 prep.main()
+
+    @patch('prep.cmd_content', return_value=False)
+    @patch('prep._confirm_cost', return_value=True)
+    @patch('prep.get_client')
+    def test_content_failure_exits_1(self, mock_client, mock_confirm, mock_cmd):
+        """main() should sys.exit(1) when cmd_content returns False."""
+        self._setup_valid_profile()
+        with patch('sys.argv', ['prep.py', 'content', '--profile', 'testprof', '--yes']):
+            with self.assertRaises(SystemExit) as cm:
+                prep.main()
+        self.assertEqual(cm.exception.code, 1)
 
 
 if __name__ == "__main__":
