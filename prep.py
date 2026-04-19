@@ -1056,10 +1056,16 @@ def _show_pipeline_status():
     nlm = list(NLM_DIR.glob("*.md"))
     print(f"NotebookLM: {len(nlm)} files")
 
-    key = os.environ.get("OPENAI_API_KEY", "")
     print(f"\nModel: {MODEL} (effort={EFFORT})")
-    print(f"API key: {'set' if key else 'NOT SET'}")
+    print(f"API key: {_api_key_status()}")
     print(f"As-of: {AS_OF}\n")
+
+
+def _api_key_status():
+    """Return 'set' or 'NOT SET' with a remediation hint when unset."""
+    if os.environ.get("OPENAI_API_KEY"):
+        return "set"
+    return "NOT SET  (run: export OPENAI_API_KEY=sk-... or source .env)"
 
 
 def _profile_summary(name):
@@ -1108,8 +1114,7 @@ def cmd_status(profile_name=None):
         # Show pipeline status for specific profile
         print(f"Profile: {profile_name} ({ROLE} @ {COMPANY})\n")
         print(f"  Config:        {_CORE_COUNT} core + {_FRONTIER_COUNT} frontier episodes, model={MODEL}")
-        key = os.environ.get("OPENAI_API_KEY", "")
-        print(f"  API key:       {'set' if key else 'NOT SET'}\n")
+        print(f"  API key:       {_api_key_status()}\n")
 
         # Pipeline checklist
         profile_dir = BASE_DIR / "profiles" / profile_name
