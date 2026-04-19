@@ -29,6 +29,26 @@ Ask all of these in your first message, then wait for my answers:
 9. **Interview dates** — Do you have interview dates? (optional — used by the Gem coaching bot)
 10. **Model preference** — Which OpenAI model do you want to use for generation? (default: gpt-5.2-pro, cheaper: gpt-4o-mini for testing)
 
+## Before Generating Files — Specificity Gate
+
+Before generating files, check Q5 (sub-areas) and Q6 (depth definition) against these bars:
+
+- **Q5 bar:** 4+ distinct concrete sub-areas, each specific enough that a technical reader could name 2-3 episodes it would cover without guessing. Example (Data Engineering): "batch pipelines, streaming, data modeling, query optimization, orchestration, data quality." Counter-examples: "data stuff," "various areas," "engineering things."
+
+- **Q6 bar:** each sub-area has at least one concrete technical anchor — protocol name, algorithm, tool, specific mechanism. Example: "batch pipelines: exactly-once with Spark checkpointing, backfill cost modeling." Counter-example: "batch pipelines: understand how they work."
+
+**If both clear** → proceed to generate files as specified below.
+
+**If either doesn't clear** → output ONLY this diagnostic, then stop:
+- Name what falls short (Q5 and/or Q6, with specifics).
+- Give 2-3 examples of good answers for the user's stated domain (Q3).
+- Ask the user to either (a) revise their answers, or (b) confirm they want to proceed anyway with a warning banner on the output.
+- Do NOT generate files without either revised answers that clear the bar, or the user's explicit "proceed anyway" confirmation.
+
+**If the user confirms "proceed anyway" despite weak inputs** → generate files as specified below, prefixed with this banner:
+
+> WARNING: Your intake answers lacked domain-specific anchors. The generated seeds will reflect that — your syllabus may be generic. You can proceed, but consider running the intake again with more concrete sub-areas before spending on `syllabus`.
+
 ## Output Files
 
 After I answer, generate ALL 5 files below. Output each inside a clearly labeled code fence so I can copy-paste them directly into my profile directory.
