@@ -839,7 +839,7 @@ def cmd_package():
     for ep, txt in content.items():
         (NLM_DIR / ep_file(ep, "content")).write_text(txt, encoding="utf-8")
     for f in misc_files:
-        (NLM_DIR / f.name).write_text(f.read_text(encoding="utf-8"))
+        (NLM_DIR / f.name).write_text(f.read_text(encoding="utf-8"), encoding="utf-8")
     print(f"  NotebookLM: {len(content) + len(misc_files)} files")
 
     # Gem: dynamic merged files
@@ -861,7 +861,7 @@ def cmd_package():
     # Copy scaffold/merge for reference
     for n in ["scaffold.md", "final_merge.md"]:
         src = SYLLABUS_DIR / n
-        if src.exists(): (GEM_DIR / f"gem-0-{n}").write_text(src.read_text(encoding="utf-8"))
+        if src.exists(): (GEM_DIR / f"gem-0-{n}").write_text(src.read_text(encoding="utf-8"), encoding="utf-8")
 
     print(f"\n=== PACKAGE COMPLETE ===")
     print(f"  NotebookLM -> {NLM_DIR}/")
