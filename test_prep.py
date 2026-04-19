@@ -801,7 +801,7 @@ class TestCmdAllFailureHandling(_ProfileTestMixin, unittest.TestCase):
         shutil.rmtree(self.tmpdir)
 
     def test_warns_on_syllabus_failure(self):
-        """If syllabus fails, cmd_all should print warning but continue."""
+        """If syllabus fails, cmd_all should print error but continue."""
         # Make syllabus fail by returning None from LLM
         client = MagicMock()
         client.responses.create.return_value = MagicMock(
@@ -824,7 +824,7 @@ class TestCmdAllFailureHandling(_ProfileTestMixin, unittest.TestCase):
             prep.SYLLABUS_RUNS = orig_runs
 
         output = f.getvalue()
-        self.assertIn("WARNING: Syllabus had failures", output)
+        self.assertIn("ERROR: Syllabus had failures", output)
 
 
 class TestCmdAllAlreadyComplete(_ProfileTestMixin, unittest.TestCase):
