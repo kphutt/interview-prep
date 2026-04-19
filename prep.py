@@ -1486,7 +1486,7 @@ def main():
     num_calls = call_counts.get(args.command, 0)
     if num_calls and not _confirm_cost(num_calls, yes=args.yes):
         print("Cancelled.")
-        return
+        sys.exit(130)
 
     if args.command == "all":
         if not cmd_all(client, force, profile_name=args.profile):

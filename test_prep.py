@@ -2461,7 +2461,9 @@ class TestCostEstimates(unittest.TestCase):
                 (profile_dir / "domain" / fname).write_text(
                     f"<!-- PLACEHOLDER -->\nreal content\n", encoding="utf-8")
             with patch('sys.argv', ['prep.py', 'syllabus', '--profile', 'testcost']):
-                prep.main()
+                with self.assertRaises(SystemExit) as cm:
+                    prep.main()
+                self.assertEqual(cm.exception.code, 130)
             mock_confirm.assert_called_once()
             mock_client.return_value.responses.create.assert_not_called()
         finally:
@@ -3852,7 +3854,8 @@ class TestCmdAllAutoSetup(_ProfileTestMixin, unittest.TestCase):
         self._setup_stub_profile("testcost")
 
         with patch('sys.argv', ['prep.py', 'all', '--profile', 'testcost']):
-            prep.main()
+            with self.assertRaises(SystemExit):
+                prep.main()
 
         # Cost should include setup calls (3 extra)
         expected = len(prep.SYLLABUS_RUNS) + len(prep.ALL_EPS) + 3
@@ -3867,7 +3870,8 @@ class TestCmdAllAutoSetup(_ProfileTestMixin, unittest.TestCase):
         self._setup_populated_profile("testcost")
 
         with patch('sys.argv', ['prep.py', 'all', '--profile', 'testcost']):
-            prep.main()
+            with self.assertRaises(SystemExit):
+                prep.main()
 
         expected = len(prep.SYLLABUS_RUNS) + len(prep.ALL_EPS)
         mock_confirm.assert_called_once_with(expected, yes=False)
