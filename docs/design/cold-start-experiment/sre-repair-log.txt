@@ -1,0 +1,1 @@
+gem-sections.md: bookshelf table header still says "<Domain Concept>" placeholder — meta-gem didn't fill it. Cosmetic. (wanted to fix, didn't)
