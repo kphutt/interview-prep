@@ -1,4 +1,4 @@
-# CLAUDE.md
+# interview-prep — contributor & AI-assistant guide
 
 ## Project overview
 
@@ -38,7 +38,7 @@ System instructions (`_syllabus_instructions()`, `_content_instructions()`, `_di
 
 Domain-specific content lives in `profiles/<name>/domain/` (4 files per `_DOMAIN_FILES`: seeds.md, coverage.md, lenses.md, gem-sections.md). These are injected into prompt templates via `{MARKER}` placeholders by `_inject_domain()`. Generated automatically by `setup` command or manually via `prompts/intake.md`.
 
-Functions that need profile state (`cmd_syllabus`, `cmd_content`, `cmd_package`, `cmd_add`) use globals set by `set_profile()`. Functions that operate on profile metadata (`cmd_setup`, `cmd_status`, `cmd_all`) take `profile_name` explicitly. This split is by design — see Tier 3 globals refactor in ROADMAP.
+Functions that need profile state (`cmd_syllabus`, `cmd_content`, `cmd_package`, `cmd_add`) use globals set by `set_profile()`. Functions that operate on profile metadata (`cmd_setup`, `cmd_status`, `cmd_all`) take `profile_name` explicitly. This split is by design.
 
 ## Commands
 
