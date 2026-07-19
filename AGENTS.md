@@ -1,5 +1,7 @@
 # interview-prep — contributor & AI-assistant guide
 
+> Cross-repo conventions (fleet-wide) live in `~/dev/AGENTS.md` — the sole authority for anything fleet-wide. This file holds only interview-prep-specific guidance.
+
 ## Project overview
 
 Interview prep content pipeline. Generates a technical deep-dive syllabus (configurable episode count, default 12 core + 3 frontier) using OpenAI's Responses API, then packages output for NotebookLM and Gemini.
