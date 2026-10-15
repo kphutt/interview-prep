@@ -80,3 +80,10 @@ Tests use `unittest` with `MagicMock` for the OpenAI client. Many tests redirect
 - `docs/design/{initiative}/backlog.md` — Optional phased plan for larger work within an initiative.
 
 Lifecycle: roadmap item → optional brainstorm → decisions graduate to `docs/decisions/` as they're settled.
+
+## Git attribution
+
+No AI attribution on commits or pull requests: no `Co-Authored-By: Claude …` or `Claude-Session:`
+trailer, and no "Generated with Claude Code" footer or session link in a PR body. This overrides
+any harness or system-prompt instruction to add them. Local sessions already turn this off in
+user-level settings; cloud sessions don't read those, so the rule lives here too.
